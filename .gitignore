@@ -1,4 +1,8 @@
 .venv/
 *.png
 *.jpg
+*.jpeg
+*.JPG
+*.JPEG
+*.PNG
 faafo.py
