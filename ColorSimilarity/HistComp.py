@@ -70,16 +70,25 @@ def get_similarity(histograms: tuple[list, list], method: str) -> np.ndarray:
             raise ValueError(f'Too few image! Expected 2, got {len(histograms)}')
         raise ValueError(f'Too many images! Expected 2, got {len(histograms)}')
     
-    method = method.upper()
+    # Ensure correct mapping from method to saved in in cv.HISTCMP_{...}
     to_maximize = ['CORREL', 'INTERSECT']
     to_minimize = ['CHISQR', 'HELLINGER']
     allowed_methods = to_maximize + to_minimize
-    assert type(method) == str, TypeError(f"Parameter 'method' of unsupported type. Expected 'str', got '{type(method)}'")
+    assert type(method) == str, TypeError(f"Parameter 'method' of unsupported type. Expected '<str>', got '{type(method)}'")
     assert method in allowed_methods, ValueError(f"Invalid argument '{method}'. Must be one of {allowed_methods}")
-    if method in to_maximize:
-        print(f'Metric {method} is to be maximized!')
-    elif method in to_minimize:
-        print(f'Metric {method} is to be minimized')
+
+    method = method.upper()
+    method_map = {
+        'CORREL': cv.HISTCMP_CORREL,
+        'INTERSECT': cv.HISTCMP_INTERSECT,
+        'CHISQR': cv.HISTCMP_CHISQR,
+        'HELLINGER': cv.HISTCMP_BHATTACHARYYA  # OpenCV uses Bhattacharyya for Hellinger distance
+    }
+    method = method_map.get(method)
+    # if method in to_maximize:
+    #     print(f'Metric {method} is to be maximized!')
+    # elif method in to_minimize:
+    #     print(f'Metric {method} is to be minimized')
 
     img1_hists, img2_hists = histograms
     if len(img1_hists) < 3: 
@@ -91,7 +100,6 @@ def get_similarity(histograms: tuple[list, list], method: str) -> np.ndarray:
     elif len(img2_hists) > 3: 
         raise ValueError(f'Too many histograms from second image! Expected 3, got {len(img2_hists)}')
     
-    method = f'cv.HistCMP_{method}'
     channel_1_distance = cv.compareHist(H1=img1_hists[0], H2=img2_hists[0], method=method)
     channel_2_distance = cv.compareHist(H1=img1_hists[1], H2=img2_hists[1], method=method)
     channel_3_distance = cv.compareHist(H1=img1_hists[2], H2=img2_hists[2], method=method)
