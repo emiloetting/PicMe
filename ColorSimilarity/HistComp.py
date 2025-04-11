@@ -1,8 +1,8 @@
-import os
 import sys
 import numpy as np
 import cv2 as cv
 from scipy.stats import wasserstein_distance
+import matplotlib.pyplot as plt
 
 
 # ==General Concept==
@@ -20,7 +20,6 @@ def normalize(array: np.ndarray, axis: int) -> np.ndarray:
         raise ValueError(f'Input must be np.array, not {type(array)}') 
     normalized = (array - np.min(array, axis=0)) / (np.max(array, axis=0) - np.min(array, axis=0))
     normalized = np.array(normalized)
-    print(f'normalized array via axis {axis}')
     return normalized
     
 
@@ -37,7 +36,7 @@ def get_histograms(img: np.ndarray, hist_color_space: str) -> tuple[np.ndarray, 
     """
     # Ensure valid hist-space is calculated
     hist_color_space=hist_color_space.upper()
-    accepted_color_spaces = ['BGR', 'RGB', 'HSV', 'LAB', 'LUV']
+    accepted_color_spaces = ['BGR', 'RGB', 'HSV', 'LAB', 'LUV', 'HLS']
     if not hist_color_space in accepted_color_spaces:
         raise TypeError(f'Unsupported histogram color space {hist_color_space}. Must be one of {accepted_color_spaces}')
     
@@ -65,13 +64,24 @@ def get_histograms(img: np.ndarray, hist_color_space: str) -> tuple[np.ndarray, 
 
     return normalized_channel_histograms
 
-def get_wassersteins(histograms: tuple[list, list], bins: int=None) -> np.ndarray:
+def get_similarity(histograms: tuple[list, list], method: str) -> np.ndarray:
     """Calculates Wasserstein-Distances per channel-histogram of two given images"""
     if len(histograms) != 2:
         if len(histograms) < 2: 
             raise ValueError(f'Too few image! Expected 2, got {len(histograms)}')
         raise ValueError(f'Too many images! Expected 2, got {len(histograms)}')
     
+    method = method.upper()
+    to_maximize = ['CORREL', 'INTERSECT']
+    to_minimize = ['CHISQR', 'HELLINGER']
+    allowed_methods = to_maximize + to_minimize
+    assert type(method) == str, TypeError(f"Parameter 'method' of unsupported type. Expected 'str', got '{type(method)}'")
+    assert method in allowed_methods, ValueError(f"Invalid argument '{method}'. Must be one of {allowed_methods}")
+    if method in to_maximize:
+        print(f'Metric {method} is to be maximized!')
+    elif method in to_minimize:
+        print(f'Metric {method} is to be minimized')
+
     img1_hists, img2_hists = histograms
     if len(img1_hists) < 3: 
         raise ValueError(f'Too few histograms from first image! Expected 3, got {len(img1_hists)}')
@@ -82,9 +92,10 @@ def get_wassersteins(histograms: tuple[list, list], bins: int=None) -> np.ndarra
     elif len(img2_hists) > 3: 
         raise ValueError(f'Too many histograms from second image! Expected 3, got {len(img2_hists)}')
     
-    channel_1_distance = wasserstein_distance(u_values=img1_hists[0], v_values=img2_hists[0])
-    channel_2_distance = wasserstein_distance(u_values=img1_hists[1], v_values=img2_hists[1])
-    channel_3_distance = wasserstein_distance(u_values=img1_hists[2], v_values=img2_hists[2])
+    method = f'cv.HistCMP_{method}'
+    channel_1_distance = cv.compareHist(H1=img1_hists[0], H2=img2_hists[0], method=method)
+    channel_2_distance = cv.compareHist(H1=img1_hists[1], H2=img2_hists[1], method=method)
+    channel_3_distance = cv.compareHist(H1=img1_hists[2], H2=img2_hists[2], method=method)
 
     return np.array([channel_1_distance, channel_2_distance, channel_3_distance])
 
@@ -103,22 +114,51 @@ def distance_as_float(vector: np.ndarray, channel_weights: tuple[float, float, f
 if __name__ == '__main__':
 
     # Test distance (should be 0)
-    img_1 = cv.imread('ColorSimilarity/image.png')
-    img_2 = cv.imread('ColorSimilarity/image2.jpg')
+    img_1 = cv.imread('ColorSimilarity/singledog.jpeg')
+    img_2 = cv.imread('ColorSimilarity/red_landscape.jpg')
 
-    histograms1 = get_histograms(img=img_1, hist_color_space='bgr')
-    histograms2 = get_histograms(img=img_2, hist_color_space='bgr')
+    histograms1 = get_histograms(img=img_1, hist_color_space='LAB')
+    histograms2 = get_histograms(img=img_2, hist_color_space='LAB')
 
     histos = [histograms1, histograms2]
-    channel_distance_vector = get_wassersteins(histograms=histos)
+    channel_distance_vector = get_similarity(histograms=histos)
     print(channel_distance_vector)
 
     float_distance = distance_as_float(vector=channel_distance_vector)
     print(float_distance)
 
+    img_1_rgb = cv.cvtColor(img_1, cv.COLOR_BGR2RGB)
+    img_2_rgb = cv.cvtColor(img_2, cv.COLOR_BGR2RGB)
+
+    fig, axes = plt.subplots(4,2)
+
+    axes[0,0].imshow(img_1_rgb)
+    axes[0,0].set_title('Img1')
+    axes[0,0].axis('off')
+
+    axes[0,1].imshow(img_2_rgb)
+    axes[0,1].set_title('Img1')
+    axes[0,1].axis('off')
+
+    axes[1,0].plot(histograms1[0])
+    axes[1,0].set_title('Img1 - Channel 1')
+
+    axes[1,1].plot(histograms2[0])
+    axes[1,1].set_title('Img2 - Channel 1')
+
+    axes[2,0].plot(histograms1[1])
+    axes[2,0].set_title('Img1 - Channel 2')
+
+    axes[2,1].plot(histograms2[1])
+    axes[2,1].set_title('Img2 - Channel 2')
+
+    axes[3,0].plot(histograms1[2])
+    axes[3,0].set_title('Img1 - Channel 3')
+
+    axes[3,1].plot(histograms2[2])
+    axes[3,1].set_title('Img2 - Channel 3')
+
+    plt.tight_layout()
+    plt.show()
+
     sys.exit()
-
-
-
-
-    
