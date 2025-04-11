@@ -7,12 +7,11 @@ import matplotlib.pyplot as plt
 
 # ==General Concept==
 #
-# To measure color similarity of two images, one can compare the images' histogram.
-# They represent color distributions of an image.
-# The difference between those histograms represent the difference in color and tone of those images.
-# To actually calculate the difference, one can e.g. use the Earth Mover's Distance (or Wasserstein Distance).
-# The Wasserstein-Distance is symmetric -> a to be == b to a, which makes is suitable for this application
-# It describes how much work would be required to transform one histogram into another.
+# When comparing to images based on their color similarity, it makes sense to compare their histograms
+# These histograms are to be calculated for each color channel in the color space
+# The results of thos comparisons depends on the chosen color space and metric
+# Currently, those metrics are implied via open-cv and include ['CORREL', 'INTERSECT', 'CHISQR', 'HELLINGER']
+# Available color spaces are ['BGR', 'RGB', 'HSV', 'LAB', 'LUV', 'HLS']
 
 def normalize(array: np.ndarray, axis: int) -> np.ndarray:
     """Normalizes values of flattened array into range [0,1]"""
