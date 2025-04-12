@@ -6,3 +6,4 @@
 *.JPEG
 *.PNG
 faafo.py
+__pycache__/
