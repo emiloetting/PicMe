@@ -7,7 +7,7 @@ from colorClusterquantized import *
 
 
 cwd = os.getcwd()
-sim_matrix_path = os.path.join(cwd, 'ColorSimilarity', 'cosine_similarity_matrix.npy')
+vector_matrix_path = os.path.join(cwd, 'ColorSimilarity', 'ImageData_vector_matrix.npy')
 
 # Create quantized LAB colors
 quantized_cosine_LAB, amount_colors = get_quantized_LAB(l_bins=8, a_bins=13, b_bins=13) # 8x13x13 = 1352 colors
@@ -33,10 +33,7 @@ with tqdm.tqdm(total=len(image_paths)) as bar:
         bar.update(1)
 
 
-M_H = np.vstack(hists)  # Stack histograms vertically 
-sim_matrix = M_H @ M_H.T  # Calculate cosine similarity matrix -> works, because the histograms are L2-normalized -> ||a|| = ||b|| = 1 and therefor each divisor is 1
+M_V = np.vstack(hists)  # Stack histograms vertically 
 
-# Safe matrix to file
-np.save(sim_matrix_path, sim_matrix, allow_pickle=True)
-
-print('Shape of the similarity matrix:', sim_matrix.shape)
+# Safe Vectors
+np.save(vector_matrix_path, M_V, allow_pickle=True)
