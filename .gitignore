@@ -1,2 +1,3 @@
 ImageData/*
 __pycache__/
+ColorSimilarity/test_images/*
