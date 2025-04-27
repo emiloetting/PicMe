@@ -3,8 +3,10 @@ import	numpy as np
 import matplotlib.pyplot as plt
 import os
 import timeit
-from scipy.spatial import cKDTree   # For mapping color signatures to quantized LAB colors, might replace with ANNOY
+from annoy import AnnoyIndex
 from itertools import product
+from typing import Tuple
+
 
 
 cwd = os.getcwd()
@@ -12,7 +14,6 @@ image = "my_test_file.jpg"
 filepath  = os.path.join(cwd, 'ColorSimilarity',  image)
 filepath1 = os.path.join(cwd, 'ColorSimilarity', "Schwan.jpeg")
 filepath2 = os.path.join(cwd, 'ColorSimilarity', "Schwan.jpeg")
-
 
 
 
@@ -126,7 +127,7 @@ def compare_images(weights1, centers1, weights2, centers2):
 
     return distance
 
-def get_quantized_LAB(l_bins: int, a_bins: int, b_bins: int) -> np.ndarray:
+def get_quantized_LAB(l_bins: int, a_bins: int, b_bins: int) -> Tuple[np.ndarray, int]:
     """
     Erzeugt eine quantisierte LAB-Farbtabelle.
 
@@ -154,7 +155,65 @@ def get_quantized_LAB(l_bins: int, a_bins: int, b_bins: int) -> np.ndarray:
     # make sure values are of type int
     quantized_lab = quantized_lab.astype(np.uint8)
 
-    return quantized_lab
+    amount_colors = quantized_lab.shape[0]  # Anzahl der quantisierten Farben
+
+    return [quantized_lab, amount_colors]
+
+def quantized_image(filepath: str, annoy_index: AnnoyIndex, quantized_cosine_LAB: np.array, normalization: str) -> np.array:
+    """
+    Function to extract color signature from an image and map it to quantized LAB colors.
+
+    Parameters:
+    - filepath: Path to the image file.
+    - quantized_cosine_LAB_tree: cKDTree for fast nearest neighbor search.
+    - quantized_cosine_LAB: Array of quantized LAB colors.
+    - normalization: Type of normalization to apply ('L1' or 'L2').
+
+    Returns:
+    - histogram_vector (np.array): Normalized histogram vector of quantized colors.
+    """
+    # Check if the normalization parameter is valid
+    if normalization not in ['L1', 'L2']:
+        raise ValueError(f"Normalization must be either 'L1' or 'L2', not '{normalization}'")
+    
+    # Extract color signatures for the images
+    centers, weights = extract_color_signature(filepath, n_clusters=64)  # 64 colors for cosine quantization step
+
+    # Map the color signature to the quantized LAB colors
+    quantized_indices = [annoy_index.get_nns_by_vector(center.astype(np.float32).tolist(), 1)[0] for center in centers]   # Get the indices of the nearest quantized colors
+    quantized_indices = np.array(quantized_indices, dtype=np.int32)  # Convert to numpy array
+
+    # In case 2 centers were quantized to the same color: remove duplicates, adapt weights
+    unique_ids, inverse = np.unique(
+        quantized_indices,
+        axis=0,
+        return_inverse=True
+        )
+
+    aggregated_weights = np.bincount(inverse, weights=weights)
+
+    # Create histogram vector of quantized colors
+    histogram_vector = np.zeros(quantized_cosine_LAB.shape[0], dtype=np.float32)
+    histogram_vector[unique_ids] = aggregated_weights
+
+    if normalization == 'L1':
+        histogram_vector /= np.sum(histogram_vector)
+    else:   
+        # L2 normalization
+        histogram_vector /= np.linalg.norm(histogram_vector, ord=2)
+
+    return histogram_vector
+
+def cosine_similarity(vector1: np.ndarray, vector2: np.ndarray) -> float:
+    """
+    Function to calculate the cosine similarity between two vectors.
+    """
+    norm_a = np.linalg.norm(vector1)    # L2 normalize vectos
+    norm_b = np.linalg.norm(vector2)
+    if norm_a == 0 or norm_b == 0:   # Avoid division by zero
+        return 0.0
+    return np.dot(vector1, vector2) / (norm_a * norm_b)
+
 
 
 if __name__ == "__main__":
