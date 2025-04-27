@@ -68,6 +68,11 @@ for i, img_path in enumerate(image_paths):
     idx_sorted = np.argsort(distances)[::-1]        # descending, so that the most similar image is first
     top5 = idx_sorted[idx_sorted != i][:5]          # Get the top 5 most similar images, excluding the input image itself
     min_index = top5
+    
+    t_cosine = time.time() - t_start
+    print('Took ', t_cosine, ' seconds to calculate cosine distances')
+
+    t_emd_start = time.time()
 
     # Collect file paths of the most similar images (according to cosine similarity)
     similar_images = [database_image_paths[i] for i in min_index]
@@ -102,8 +107,8 @@ for i, img_path in enumerate(image_paths):
     sim_list.sort(key=lambda x: x[2])
 
     # Stop here (rest of the code is visualization)
-    stop_time = time.time() - t_start
-    print('Took', stop_time, 'seconds to find the most similar images for', img_path.split('/')[-1])
+    emd_time = time.time() - t_emd_start
+    print('Took ', emd_time, ' seconds to calculate EMDs')
 
 
     # Visualization 
