@@ -49,7 +49,6 @@ annoy_index_EMD.build(10)  # Build 10 trees for the index
 
 # Load cosine similarity matrix
 M_V = np.load('ColorSimilarity/ImageData_vector_matrix.npy')
-sim_matrix = M_V @ M_V.T  # Calculate cosine similarity matrix -> works, because the histograms are L2-normalized -> ||a|| = ||b|| = 1 and therefor each divisor is 1
 
 
 # Iterate through each image and find the most similar images
@@ -61,10 +60,10 @@ for i, img_path in enumerate(image_paths):
     # Histogram Vector for image
     hist_vector = hist = quantized_image(img_path, annoy_index_cosine, quantized_cosine_LAB, 'L2') # Use L2 for finding cosine similarity
 
-    # Calculate Cosine-Distances
-    distances = np.dot(M_V, hist_vector)  # Calculate cosine distances between the histogram vector and all other histogram vectors in Database-Vectors
+    # Calculate Cosine-Similarity
+    distances = np.dot(M_V, hist_vector)  # Calculate cosine similarity between the histogram vector and all other histogram vectors in Database-Vectors
 
-    # Find minimum distance and corresponding index
+    # Find maximum cosine similarites
     idx_sorted = np.argsort(distances)[::-1]        # descending, so that the most similar image is first
     top5 = idx_sorted[idx_sorted != i][:5]          # Get the top 5 most similar images, excluding the input image itself
     min_index = top5
