@@ -38,9 +38,10 @@ def extract_color_signature(img_path: str, n_clusters: int) -> tuple:
     pixels = np.float32(img.reshape(-1, 3))
 
     #Werte normalisieren
-    pixels[:, 0] /= 100.0  
-    pixels[:, 1:] += 128.0  
-    pixels[:, 1:] /= 255.0	    
+    # pixels[:, 0] /= 100.0  
+    # pixels[:, 1:] += 128.0  
+    # pixels[:,:] /= 255.0	   
+
     # 8 cluster
     k=n_clusters
     # Abbruchkritereien (komische opencv kacke, "+"" weil beide kriterien gelten, 100 Durchläufe, 0.1 epsilon)
@@ -145,19 +146,16 @@ def get_quantized_LAB(l_bins: int, a_bins: int, b_bins: int) -> Tuple[np.ndarray
     quantized_lab : numpy.ndarray
         Quantisierte LAB-Farbtabelle
     """
-    
-    l = np.linspace(0, 100, l_bins)
-    a = np.linspace(-128, 127, a_bins)
-    b = np.linspace(-128, 127, b_bins)
+    # OpenCV‑Lab value ranges: L∈[0,255], a∈[0,255], b∈[0,255]
+    l = np.linspace(0, 255, l_bins, dtype=np.uint8)
+    a = np.linspace(0, 255, a_bins, dtype=np.uint8)
+    b = np.linspace(0, 255, b_bins, dtype=np.uint8)
 
-    quantized_lab = np.array(list(product(l, a, b)))    # build cartesian product of l, a, b
-    
-    # make sure values are of type int
+    quantized_lab = np.array(list(product(l, a, b)))    # build cartesian product
     quantized_lab = quantized_lab.astype(np.uint8)
 
-    amount_colors = quantized_lab.shape[0]  # Anzahl der quantisierten Farben
-
-    return [quantized_lab, amount_colors]
+    amount_colors = quantized_lab.shape[0]
+    return quantized_lab, amount_colors
 
 def quantized_image(filepath: str, annoy_index: AnnoyIndex, quantized_cosine_LAB: np.array, normalization: str) -> np.array:
     """
