@@ -20,7 +20,7 @@ for index, color in enumerate(quantized_cosine_LAB):
 annoy_index.build(10)  # Build 10 trees for the index
 
 
-# Create Matrix of cosine distances between quantized image-vectors
+# Setup paths
 image_data_root = os.path.join(cwd, 'ImageData')
 image_paths = [os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))]
 
