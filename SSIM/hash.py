@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict
 from pathlib import Path
 from scipy.spatial.distance import hamming
 from tqdm import tqdm
-
+import time
 
 
 class PerceptualHash:
@@ -44,7 +44,7 @@ class PerceptualHash:
 class HashDatabase:
     """build a hash database and search for similar images"""
     
-    def __init__(self, db_path: str = "image_hashes.db"):
+    def __init__(self, db_path: str):
         self.db_path = db_path
         self.init_database()
     
@@ -96,8 +96,8 @@ class HashDatabase:
         conn.close()
         
         hash_dict = {}
-        for path, phash in results:
-            hash_dict[path] = phash
+        for id, phash in results:
+            hash_dict[id] = phash
         return hash_dict
     
     def find_similar(self, query_hash: str, max_distance: int = 15, 
@@ -117,12 +117,11 @@ class HashDatabase:
         all_hashes = self.get_all_hashes()
         results = []
         
-        for image_path, stored_hash in all_hashes.items():
+        for id, stored_hash in all_hashes.items():
             distance = PerceptualHash.hamming_distance(hash1 = query_hash, hash2 = stored_hash)
             
             if distance <= max_distance:
-                similarity = ((64 - distance) / 64) * 100
-                results.append({'image_path': image_path, 'distance': distance,'similarity': similarity})
+                results.append({'id': id, 'distance': distance})
         
         # sort by distance
         results.sort(key=lambda x: x['distance'])
@@ -134,7 +133,7 @@ class HashDatabase:
 class ImageHashProcessor:
     """process images and add their hashes to the database"""
 
-    def __init__(self, db_path: str = "Testbilder_hashes.db"):
+    def __init__(self, db_path: str):
         self.db = HashDatabase(db_path)
 
     def image_generator(self, directory_path: str, image_extensions: tuple = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')):
@@ -169,14 +168,14 @@ class ImageHashProcessor:
 
 
 
-def process_images(directory_path: str, db_path: str = "image_hashes.db"):
+def process_images(directory_path: str, db_path: str):
     """process all images in a directory and add their hashes to the database"""
 
     processor = ImageHashProcessor(db_path)
     processor.process_directory(directory_path)
     
 
-def get_similar_images(image_path: str, max_distance: int = 30, max_results: int = 5, db_path: str = "image_hashes.db"):
+def get_similar_images(image_path: str, db_path: str, max_distance: int = 30, max_results: int = 1000):
     """get similar images to a given image"""
 
     db = HashDatabase(db_path)
@@ -188,6 +187,5 @@ def get_similar_images(image_path: str, max_distance: int = 30, max_results: int
 
 
 if __name__ == '__main__':
-    results = get_similar_images(image_path=r"C:\Users\joche\Documents\BigData\Repo\PicMe\SSIM\Testbilder\dog.42.jpg", db_path=r"C:\Users\joche\Documents\BigData\Repo\PicMe\Testbilder_hashes.db")
-    print(results)
-    #process_images(directory_path=r"C:\Users\joche\Documents\BigData\Repo\PicMe\SSIM\Testbilder", db_path=r"C:\Users\joche\Documents\BigData\Repo\PicMe\Testbilder_hashes.db")
+    #process_images(directory_path=, db_path=)
+    pass
