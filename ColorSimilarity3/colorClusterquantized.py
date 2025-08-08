@@ -4,9 +4,9 @@ from numpy.typing import NDArray
 
 
 
-L_BINS = 4
-A_BINS = 18
-B_BINS = 18
+L_BINS = 7
+A_BINS = 13
+B_BINS = 13
 
 
 
@@ -56,31 +56,26 @@ def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normal
     total_bins = l_bins * a_bins * b_bins
     histogram_vector = np.bincount(linear_idx, minlength=total_bins).astype(np.float32)
 
+
     if normalization == 'L1':
         histogram_vector /= np.sum(histogram_vector)
     else:   
         # L2 normalization
-        histogram_vector /= np.linalg.norm(histogram_vector, ord=2)
-
+        histogram_vector /= max(np.linalg.norm(histogram_vector), 1e-12)
     return histogram_vector
 
 
-def get_bin_centers(l_bins: int, a_bins: int, b_bins: int, round: bool) -> NDArray:
-    """
-    Return center-colors for each bin
-    """
-    if round:
-        l_centers = np.round(np.linspace(0, 100, l_bins))
-        a_centers = np.round(np.linspace(-128, 127, a_bins))
-        b_centers = np.round(np.linspace(-128, 127, b_bins))
-    else: 
-        l_centers = np.linspace(0, 100, l_bins)
-        a_centers = np.linspace(-128, 127, a_bins)
-        b_centers = np.linspace(-128, 127, b_bins)
+def get_bin_centers(l_bins: int, a_bins: int, b_bins: int) -> np.ndarray:
+    l_edges = np.linspace(0, 100, l_bins + 1)
+    a_edges = np.linspace(-128, 127, a_bins + 1)
+    b_edges = np.linspace(-128, 127, b_bins + 1)
+
+    l_centers = (l_edges[:-1] + l_edges[1:]) / 2
+    a_centers = (a_edges[:-1] + a_edges[1:]) / 2
+    b_centers = (b_edges[:-1] + b_edges[1:]) / 2
 
     grid = np.array(np.meshgrid(l_centers, a_centers, b_centers, indexing='ij'))
-    bin_centers = grid.reshape(3, -1).T  # shape: (total_bins, 3)
-    return bin_centers
+    return grid.reshape(3, -1).T
 
 
 def quantized_image_signed(filepath: str, l_bins: int, a_bins: int, b_bins: int, normalization: str) -> NDArray:

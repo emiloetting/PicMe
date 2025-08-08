@@ -10,11 +10,9 @@ import time
 
 cwd = os.getcwd()
 test_img_dir = os.path.join(cwd, 'ColorSimilarity3', 'test_images')
-full_hists_ab_path = os.path.join(cwd, 'ColorSimilarity3', 'ABHists.npy')
-full_hist_l_path = os.path.join(cwd, 'ColorSimilarity3', "LightHists.npy")
-full_hists_complete_path = os.path.join(cwd, 'ColorSimilarity3', 'FullHists_Complete.npy')
+full_hists_L1 = os.path.join(cwd, 'ColorSimilarity3', 'FullHists_L1.npy')
+full_hists_L2 = os.path.join(cwd, 'ColorSimilarity3', 'FullHists_L2.npy')
 cost_mat_full_path = os.path.join(cwd, "ColorSimilarity3", 'CostMatrix_full.npy')
-cost_mat_light_path = os.path.join(cwd, "ColorSimilarity3", "CostMatrix_light.npy")
 image_data_root = os.path.join(cwd, 'ImageData')
 
 
@@ -26,14 +24,11 @@ image_paths = [os.path.join(test_img_dir, img) for img in os.listdir(test_img_di
 database_image_paths = [os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))]
 
 # Load img-vector matrix
-M_V_complete = np.load(full_hists_complete_path)
-M_V_ab = np.load(full_hists_ab_path)
-M_V_l = np.load(full_hist_l_path)
+M_V_L1 = np.load(full_hists_L1)
+M_V_L2 = np.load(full_hists_L2)
 
 # Load cost-matrix for EMD
 cost_matrix_full = np.load(cost_mat_full_path)
-cost_matrix_light = np.load(cost_mat_light_path)
-
 
 
 # Iterate through each image and find the most similar images
@@ -43,10 +38,8 @@ for i, img_path in enumerate(image_paths):
     start = time.time()
 
     # Histogram Vector for image
-    # hist_vector_ab, hist_vector_l = quantized_image_two_vecs(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L2') # Use L2 for finding cosine similarity
-    # distances = np.dot(M_V_ab,hist_vector_ab)  # Calculate cosine similarities between the histogram vector and all other histogram vectors in Database-Vectors
     hist_vector = quantized_image(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L2')
-    distances = np.dot(M_V_complete,hist_vector)
+    distances = np.dot(M_V_L2,hist_vector)
 
     # Pre-Sort & Find maximum cosine similarites
     max_sim = np.max(distances)
@@ -57,11 +50,11 @@ for i, img_path in enumerate(image_paths):
     # Calc full vec for all vecs mit cos-sim of more than half of best cos-sim found
     full_input_vec = quantized_image(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L2')
     full_input_vec = full_input_vec.astype(np.float64)
-    distances_full_vecs = np.dot(M_V_complete[filtered_indices], full_input_vec)
+    distances_full_vecs = np.dot(M_V_L2[filtered_indices], full_input_vec)
     
     # Sort remainaing imgs
     idx_sorted = np.argsort(distances_full_vecs)[::-1]       # descending, so that the most similar image is first
-    min_index = filtered_indices[idx_sorted[:5]]            # Get the top 5 most similar images
+    min_index = filtered_indices[idx_sorted[:10]]            # Get the top 5 most similar images
 
     # Collect file paths of the most similar images (according to cosine similarity)
     similar_images = [database_image_paths[i] for i in min_index]
@@ -73,18 +66,10 @@ for i, img_path in enumerate(image_paths):
     # Time EMD-Calculations
     start = time.time()
 
-    # Get EMD-Colorspace vector of input image
-
-    # UNCOMMENTED: USE FOR ADDITION OF SUB-EMD-DISTS
-    # input_hist_pos, input_hist_neg, input_hist_light = quantized_image_three_vecs(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L1')
-    # input_hist_pos = input_hist_pos.astype(np.float64)
-    # input_hist_neg = input_hist_neg.astype(np.float64)
-    # input_hist_light = input_hist_light.astype(np.float64)
-
-    # Calculate hist for input image
-    input_hist_ab, input_hist_l = quantized_image_two_vecs(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L1')
-    input_hist_ab = input_hist_ab.astype(np.float64)
-    input_hist_l = input_hist_l.astype(np.float64)
+    # # Calculate hist for input image
+    # input_hist_ab, input_hist_l = quantized_image_two_vecs(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L1')
+    # input_hist_ab = input_hist_ab.astype(np.float64)
+    # input_hist_l = input_hist_l.astype(np.float64)
 
     # Init empty list to keep distances to top 10 selected imgs according to cosine-sim
     EMD_full_distances = []
@@ -92,32 +77,16 @@ for i, img_path in enumerate(image_paths):
     # List for weighted full decisive metric
     final_metric = []
 
+    # Input L1
+    hist_vector_L1 = quantized_image(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L1').astype(np.float64)
+
     # For each image in Top 10
     for i, (idx, sim_path) in enumerate(zip(min_index, similar_images)):
         
-        # data_hist_pos, data_hist_neg, data_hist_light = quantized_image_three_vecs(sim_path, l_bins=int(L_BINS), a_bins=int(A_BINS), b_bins=int(B_BINS), normalization='L1')
-        # data_hist_pos = data_hist_pos.astype(np.float64)
-        # data_hist_neg = data_hist_neg.astype(np.float64)
-        # data_hist_light = data_hist_light.astype(np.float64)
-
-        # Calculate EMD/Wasserstein for both
-        # pos_dist, _ = emd_with_flow(input_hist_pos, data_hist_pos, cost_matrix_full)
-        # neg_dist, _ = emd_with_flow(input_hist_neg, data_hist_neg, cost_matrix_full)
-        # light_hist, _ = emd_with_flow(input_hist_light, data_hist_light, cost_matrix_light)
-
-        # dist = pos_dist + neg_dist + light_hist
-
         # Get complete EMD for 
-        db_full_hist = M_V_complete[idx].astype(np.float64)
-        db_ab_hist = M_V_ab[idx].astype(np.float64)
-        db_l_hist = M_V_l[idx].astype(np.float64)
+        db_full_hist = M_V_L1[idx].astype(np.float64)
 
-        # dist_ab, _ = emd_with_flow(input_hist_ab, db_ab_hist, cost_ab)
-        # dist_l, _ = emd_with_flow(input_hist_l, db_l_hist, cost_matrix_light)
-        dist , _ = emd_with_flow(full_input_vec, db_full_hist, cost_matrix_full)
-        # print(dist_ab, ' - ', dist_l)
-
-        # dist = 1.3*dist_ab  + .7*dist_l
+        dist , _ = emd_with_flow(hist_vector_L1, db_full_hist, cost_matrix_full)
         EMD_full_distances.append(float(dist))
 
         final_metric.append(dist / (1*cosine_values[i]))
@@ -125,10 +94,11 @@ for i, img_path in enumerate(image_paths):
     # Sort by EMD distance (ascending -> most similar first)
     cosine_values_updated = distances_full_vecs  # passt zu dem, was du sortierst
     sim_list = list(zip(similar_images, cosine_values_updated, EMD_full_distances, final_metric))
-    sim_list.sort(key=lambda x: x[2])  # Sort by EMD distance
+    sim_list.sort(key=lambda x: x[3])  # Sort by EMD distance
 
     # Display duration of calculatin time
     print(f"EMDs: {time.time()-start:.3f}s\n")
+
 
 
     # Visualization 
@@ -140,7 +110,6 @@ for i, img_path in enumerate(image_paths):
     axs[0].axis('off')
     axs[0].set_title('Input')
 
-
     # Top 5 Kandidaten (nach EMD sortiert)
     for col, (sim_path, cos_v, emd_v, total_score) in enumerate(sim_list[:5], start=1):
 
@@ -149,7 +118,6 @@ for i, img_path in enumerate(image_paths):
         axs[col].set_title(f'#{col}\nCos: {cos_v:.3f}\nEMD: {emd_v:.3f}\nTotal Score: {total_score:.3f}')
         axs[col].axis('off')
         
-
     plt.tight_layout()
     plt.show()
 
