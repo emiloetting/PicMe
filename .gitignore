@@ -2,7 +2,4 @@ ImageData/*
 __pycache__/
 ColorSimilarity/test_images/*
 ColorSimilarity/*.npy
-ColorSimilarity2/test_images/*
-ColorSimilarity2/*.npy
-ColorSimilarity3/test_images/*
-ColorSimilarity3/*.npy
+.venv/
