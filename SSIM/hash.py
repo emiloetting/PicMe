@@ -30,14 +30,16 @@ class PerceptualHash:
         # compute hash
         median = np.median(dct)
         hash_array = (dct > median).astype(int)
-        hash_string = ''.join(str(x) for x in hash_array)
-
-        return hash_string
-    
+       
+        hash_str = ''.join(map(str, hash_array))
+        return hash_str
+  
     def hamming_distance( hash1, hash2):
         """calculates the hamming distance of two hashes"""
-
-        return sum(bit1 != bit2 for bit1, bit2 in zip(hash1, hash2))
+        int1 = int(hash1, 2)
+        int2 = int(hash2, 2)
+        xor_result = int1 ^ int2
+        return bin(xor_result).count('1')
     
     
 
@@ -91,7 +93,7 @@ class HashDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT image_path, phash FROM image_hashes')
+        cursor.execute('SELECT id, phash FROM whole_db')
         results = cursor.fetchall()
         conn.close()
         
