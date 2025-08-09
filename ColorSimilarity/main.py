@@ -1,145 +1,112 @@
 import numpy as np
 import os
 from colorClusterquantized import *
-from annoy import AnnoyIndex
 import cv2 as cv
 import matplotlib.pyplot as plt
+from pyemd import emd_with_flow
 import time
-
 
 
 
 cwd = os.getcwd()
 test_img_dir = os.path.join(cwd, 'ColorSimilarity', 'test_images')
+test_img_dir = os.path.join(cwd, 'ColorSimilarity', 'DAISY_25')
+full_hists_L1 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L1.npy')
+full_hists_L2 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L2.npy')
+cost_mat_full_path = os.path.join(cwd, "ColorSimilarity", 'CostMatrix_full.npy')
 image_data_root = os.path.join(cwd, 'ImageData')
 
 
 # Setup path for image to find most similar images to
 image_paths = [os.path.join(test_img_dir, img) for img in os.listdir(test_img_dir) if os.path.isfile(os.path.join(test_img_dir, img))]
 
-
-# Setup quantized color spaces
-quantized_cosine_LAB, amount_colors = get_quantized_LAB(l_bins=8, a_bins=13, b_bins=13) # for cosing similarity
-quantized_EMD_LAB, amount_colors = get_quantized_LAB(l_bins=5, a_bins=5, b_bins=5) # for EMD
-
-
-# Ignore (for visualization, calculated for displaying bar in color they are representing)
-_lab = quantized_EMD_LAB.astype(np.uint8)[None, ...]              
-_bgr = cv.cvtColor(_lab, cv.COLOR_Lab2BGR)[0]                     
-rgb_EMD_colors = _bgr[..., ::-1].astype(np.float32) / 255.0
-
-
 # Setup array of filepaths to find images later (will be found via index of this Array, as vectors were built in same order using same list)
 database_image_paths = [os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))]
 
+# Load img-vector matrix
+M_V_L1 = np.load(full_hists_L1)
+M_V_L2 = np.load(full_hists_L2)
 
-# Prepare Annoy for Quantizing image to Cosine-LAB
-annoy_index_cosine = AnnoyIndex(3, 'angular')  # 3 dimensions for LAB color space
-for index, color in enumerate(quantized_cosine_LAB):
-    annoy_index_cosine.add_item(index, quantized_cosine_LAB[index].astype(np.float32))    # Add quantized colors to the index
-annoy_index_cosine.build(10)  # Build 10 trees for the index
-
-
-# Prepare Annoy for Quantizing image to EMD-LAB
-annoy_index_EMD = AnnoyIndex(3, 'angular')  
-for index, color in enumerate(quantized_EMD_LAB):
-    annoy_index_EMD.add_item(index, quantized_EMD_LAB[index].astype(np.float32))    # Add quantized colors to the index
-annoy_index_EMD.build(10)  # Build 10 trees for the index
-
-
-# Load cosine similarity matrix
-M_V = np.load('ColorSimilarity/ImageData_vector_matrix.npy')
+# Load cost-matrix for EMD
+cost_matrix_full = np.load(cost_mat_full_path)
 
 
 # Iterate through each image and find the most similar images
 for i, img_path in enumerate(image_paths):
 
-    # To quickly measure
-    t_start = time.time()
+    # Start timer for time-inspection in terminal
+    start = time.time()
 
     # Histogram Vector for image
-    hist_vector = hist = quantized_image(img_path, annoy_index_cosine, quantized_cosine_LAB, 'L2') # Use L2 for finding cosine similarity
+    hist_vector = quantized_image(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L2')
+    print(f'Hist for input took: {time.time()-start:.3f}s')
+    distances = np.dot(M_V_L2,hist_vector)
 
-    # Calculate Cosine-Similarity
-    distances = np.dot(M_V, hist_vector)  # Calculate cosine similarity between the histogram vector and all other histogram vectors in Database-Vectors
-
-    # Find maximum cosine similarites
-    idx_sorted = np.argsort(distances)[::-1]        # descending, so that the most similar image is first
-    top5 = idx_sorted[idx_sorted != i][:5]          # Get the top 5 most similar images, excluding the input image itself
-    min_index = top5
+    # Pre-Sort & Find maximum cosine similarites
+    max_sim = np.max(distances)
+    mask = distances > (0.5 * max_sim)
+    filtered_indices = np.where(mask)[0]
+    filtered_distances = distances[mask]
     
-    t_cosine = time.time() - t_start
-    print('Took ', t_cosine, ' seconds to calculate cosine distances')
-
-    t_emd_start = time.time()
+    # Sort remainaing imgs
+    idx_sorted = np.argsort(filtered_distances)[::-1]       # descending, so that the most similar image is first
+    min_index = filtered_indices[idx_sorted[:10]]            # Get the top 5 most similar images
 
     # Collect file paths of the most similar images (according to cosine similarity)
     similar_images = [database_image_paths[i] for i in min_index]
 
-    # Get EMD-Colorspace vector of input image
-    input_EMD = quantized_image(img_path, annoy_index_EMD, quantized_EMD_LAB, 'L1')
+    # Get cosine values for the top 5
+    cosine_values = filtered_distances[idx_sorted[:10]]
+    print(f"Cosine time:{time.time()-start:.3f}s")  # Display required time 
 
-    # Combine EMD histogram with indices for EMD calculation for input image
-    weighted_bins_input = np.column_stack((
-        input_EMD.astype(np.float32),
-        np.arange(input_EMD.size, dtype=np.float32)
-    ))
+    # Time EMD-Calculations
+    start_emd = time.time()
 
-    hist_EMD_sims = []
-    EMD_distances = []
+    # Init empty list to keep distances to top 10 selected imgs according to cosine-sim
+    EMD_full_distances = []
 
-    for sim_path in similar_images:
-        hist = quantized_image(sim_path, annoy_index_EMD, quantized_EMD_LAB, 'L1')
-        hist_EMD_sims.append(hist)
+    # List for weighted full decisive metric
+    final_metric = []
 
-        # Copute EMD histogram for similar image
-        weighted_bins_sim = np.column_stack((
-            hist.astype(np.float32),
-            np.arange(hist.size, dtype=np.float32)
-        ))
-        # Calculate EMD/Wasserstein
-        dist, _, _ = cv.EMD(weighted_bins_input, weighted_bins_sim, cv.DIST_L2)
-        EMD_distances.append(float(dist))
+    # Input L1
+    hist_vector_L1 = quantized_image(img_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L1').astype(np.float64)
+
+    # For each image in Top 10
+    for i, (idx, sim_path) in enumerate(zip(min_index, similar_images)):
+        
+        # Get complete EMD for 
+        db_full_hist = M_V_L1[idx].astype(np.float64)
+
+        dist , _ = emd_with_flow(hist_vector_L1, db_full_hist, cost_matrix_full)
+        EMD_full_distances.append(float(dist))
+
+        final_metric.append(dist / max(cosine_values[i], 1e-9))
 
     # Sort by EMD distance (ascending -> most similar first)
-    sim_list = list(zip(similar_images, distances[min_index], EMD_distances, hist_EMD_sims))
-    sim_list.sort(key=lambda x: x[2])
+    # cosine_values_updated = distances_full_vecs  # passt zu dem, was du sortierst
+    sim_list = list(zip(similar_images, cosine_values, EMD_full_distances, final_metric))
+    sim_list.sort(key=lambda x: x[3])  # Sort by EMD distance
 
-    # Stop here (rest of the code is visualization)
-    emd_time = time.time() - t_emd_start
-    print('Took ', emd_time, ' seconds to calculate EMDs')
+    # Display duration of calculatin time
+    print(f"EMDs: {time.time()-start_emd:.3f}s\n")
+
 
 
     # Visualization 
     # Create figure
-    fig, axs = plt.subplots(2, 6, figsize=(18, 8))
+    fig, axs = plt.subplots(1, 6, figsize=(18, 8))
 
     # Display input image
-    axs[0, 0].imshow(cv.imread(img_path)[..., ::-1])
-    axs[0, 0].axis('off')
-    axs[0, 0].set_title('Input')
+    axs[0].imshow(cv.imread(img_path)[..., ::-1])
+    axs[0].axis('off')
+    axs[0].set_title('Input')
 
-    # Show it's EMD histogram (color displayed in rgb)
-    in_hist = input_EMD
-    for bi, idx in enumerate(np.argsort(in_hist)[::-1]):
-        wt = in_hist[idx]
-        axs[1, 0].bar(bi, wt, color=rgb_EMD_colors[idx], width=0.8)
-    axs[1, 0].set_xticks([])
-    axs[1, 0].set_ylim(0, in_hist.max() * 1.2)
-
-    # Do same but for top 5 candidates chosen via cosine similarity
-    for col, (sim_path, cos_v, emd_v, hist_emd) in enumerate(sim_list, start=1):
-        axs[0, col].imshow(cv.imread(sim_path)[..., ::-1])
-        axs[0, col].set_title(f'#{col}\nCos: {cos_v:.3f}\nEMD: {emd_v:.3f}')
-        axs[0, col].axis('off')
-    
-        sorted_idx = np.argsort(hist_emd)[::-1]
-        for bi, idx in enumerate(sorted_idx):
-            wt = hist_emd[idx]
-            axs[1, col].bar(bi, wt, color=rgb_EMD_colors[idx], width=0.8)
-        axs[1, col].set_xticks([])
-        axs[1, col].set_ylim(0, hist_emd.max() * 1.2)
-
+    # Top 5 Kandidaten (nach EMD sortiert)
+    for col, (sim_path, cos_v, emd_v, total_score) in enumerate(sim_list[:5], start=1):
+        axs[col].imshow(cv.imread(sim_path)[..., ::-1])
+        axs[col].set_title(f'#{col}\nCos: {cos_v:.3f}\nEMD: {emd_v:.3f}\nTotal Score: {total_score:.3f}')
+        axs[col].axis('off')
+        
     plt.tight_layout()
     plt.show()
 

@@ -1,228 +1,239 @@
 import cv2	
 import	numpy as np
-import matplotlib.pyplot as plt
-import os
-import timeit
-from annoy import AnnoyIndex
-from itertools import product
-from typing import Tuple
-from skimage.color import lab2rgb
+from numpy.typing import NDArray
 
 
 
-cwd = os.getcwd()
-image = "my_test_file.jpg"
-filepath  = os.path.join(cwd, 'ColorSimilarity',  image)
-filepath1 = os.path.join(cwd, 'ColorSimilarity', "Schwan.jpeg")
-filepath2 = os.path.join(cwd, 'ColorSimilarity', "Schwan.jpeg")
+L_BINS = 5
+A_BINS = 15
+B_BINS = 15
 
 
 
-def extract_color_signature(img_path: str, n_clusters: int) -> tuple:
-    """
-    Extracts the color signature of an image using k-means clustering in the Lab color space.
-    The function normalizes the pixel values, applies k-means clustering, and returns the cluster centers and their weights.
-
-    The cluster centers are converted back to BGR color space for visualization.
-    The weights are normalized to sum to 1.
-
-    Arguments:
-        img_path [str]: Path to the image file.
-
-    Returns:
-        [centers (LAB) [np.array], weights[np.array]]
-    """
-    
-    img = cv2.imread(img_path)
-    
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
-    pixels = np.float32(img.reshape(-1, 3))
-
-    # normalise the pixel values
-    # pixels[:, 0] /= 100.0  
-    # pixels[:, 1:] += 128.0  
-    # pixels[:,:] /= 255.0	   
-
-    k=n_clusters
-
-    # criteria to stop the algorithm (max. 100 iterations, 0.1 epsilon)
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
-
-    # k clusters, no labels, criteria from above, 10 runs with different centers, cluster centers
-    _, labels, centers = cv2.kmeans(pixels, k, None, criteria, 10, cv2.KMEANS_PP_CENTERS)
-
-    # calculate weights
-    unique_labels, counts = np.unique(labels, return_counts=True)
-    weights = np.zeros(k)
-    for i, label in enumerate(unique_labels):
-        weights[label] = counts[i]
-
-    # normalize weights
-    weights = weights / np.sum(weights)  
-
-    
-    return [centers, weights]
-
-
-def visualize_color_signature(centers, weights, figsize=(10, 4)):
-    """
-    Visualisiert eine Farbsignatur.
-    
-    Parameters:
-    -----------
-    centers : numpy.ndarray
-        Die k repräsentativen Farben
-    weights : numpy.ndarray
-        Die relative Häufigkeit jeder Farbe
-    """
-    sorted_indices = np.argsort(weights)[::-1]
-    sorted_centers = centers[sorted_indices]
-    sorted_weights = weights[sorted_indices]
-    
-    plt.figure(figsize=figsize)
-    
-    for i, (center, weight) in enumerate(zip(sorted_centers, sorted_weights)):
-        center[0] /= 255.0
-        center[0] *= 100.0
-        center[1:] -= 128.0
-        
-        rgb_color = lab2rgb(center)
-
-        plt.bar(i, weight, color=rgb_color, width=0.8)
-        
-        plt.text(i, weight + 0.01, f"{weight*100:.1f}%", 
-                 ha='center', va='bottom', fontsize=9)
-    
-    plt.xlabel('Farbcluster')
-    plt.ylabel('Relative Häufigkeit')
-    plt.title('Farbsignatur des Bildes')
-    plt.xticks([])  
-    plt.ylim(0, max(weights) * 1.2)  
-    plt.show()
-
-
-def compare_images(weights1, centers1, weights2, centers2):
-    """
-    Vergleicht zwei Farbsignaturen mithilfe der Earth Mover's Distance (EMD).
-
-    Die Funktion berechnet die EMD zwischen zwei Farbsignaturen, die durch ihre Gewichte und Zentren dargestellt werden.
-    Die Gewichte und Zentren werden in numpy-Arrays umgewandelt, bevor die EMD berechnet wird.
-
-    Arguments:
-    
-            weights1 [np.array]: Gewichte der ersten Farbsignatur.
-            centers1 [np.array]: Zentren der ersten Farbsignatur.
-            weights2 [np.array]: Gewichte der zweiten Farbsignatur.
-            centers2 [np.array]: Zentren der zweiten Farbsignatur.
-
-    Returns:
-            [distance [float]]: Die berechnete EMD zwischen den beiden Farbsignaturen.
-    """
-    weights1 = np.array(weights1, dtype=np.float32)
-    weights2 = np.array(weights2, dtype=np.float32)
-    centers1 = np.array(centers1, dtype=np.float32)
-    centers2 = np.array(centers2, dtype=np.float32)
-
-
-    signature1 = np.column_stack((weights1, centers1))
-    signature2 = np.column_stack((weights2, centers2))
-
-
-    distance, _,_ = cv2.EMD(signature1,signature2,cv2.DIST_L1)
-
-    return distance
-
-def get_quantized_LAB(l_bins: int, a_bins: int, b_bins: int) -> Tuple[np.ndarray, int]:
-    """
-    Erzeugt eine quantisierte LAB-Farbtabelle.
-
-    Parameters:
-    -----------
-    l_bins : int
-        Anzahl der L-Bins
-    a_bins : int
-        Anzahl der a-Bins
-    b_bins : int
-        Anzahl der b-Bins
-
-    Returns:
-    --------
-    quantized_lab : numpy.ndarray
-        Quantisierte LAB-Farbtabelle
-    """
-    # OpenCV‑Lab value ranges: L∈[0,255], a∈[0,255], b∈[0,255]
-    l = np.linspace(0, 255, l_bins, dtype=np.uint8)
-    a = np.linspace(0, 255, a_bins, dtype=np.uint8)
-    b = np.linspace(0, 255, b_bins, dtype=np.uint8)
-
-    quantized_lab = np.array(list(product(l, a, b)))    # build cartesian product
-    quantized_lab = quantized_lab.astype(np.uint8)
-
-    amount_colors = quantized_lab.shape[0]
-    return quantized_lab, amount_colors
-
-def quantized_image(filepath: str, annoy_index: AnnoyIndex, quantized_cosine_LAB: np.array, normalization: str) -> np.array:
+def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normalization: str) -> NDArray:
     """
     Function to extract color signature from an image and map it to quantized LAB colors.
 
-    Parameters:
-    - filepath: Path to the image file.
-    - quantized_cosine_LAB_tree: cKDTree for fast nearest neighbor search.
-    - quantized_cosine_LAB: Array of quantized LAB colors.
-    - normalization: Type of normalization to apply ('L1' or 'L2').
+    Args:
+        filepath (str): Path to the image file
+        l_bins (int): Amount of bins on lightness-channel
+        a_bins (int): Amount of bins on a-channel
+        b_bins (int): Amount of bins on b-channel
+        normalization (str): Type of normalization to apply ('L1' or 'L2')
 
     Returns:
-    - histogram_vector (np.array): Normalized histogram vector of quantized colors.
+        histogram_vector (NDArray): Normalized histogram vector of quantized colors in origian CIE-LAB 
     """
     # Check if the normalization parameter is valid
     if normalization not in ['L1', 'L2']:
         raise ValueError(f"Normalization must be either 'L1' or 'L2', not '{normalization}'")
-    
-    # Extract color signatures for the images
-    centers, weights = extract_color_signature(filepath, n_clusters=64)  # 64 colors for cosine quantization step
 
-    # Map the color signature to the quantized LAB colors
-    quantized_indices = [annoy_index.get_nns_by_vector(center.astype(np.float32).tolist(), 1)[0] for center in centers]   # Get the indices of the nearest quantized colors
-    quantized_indices = np.array(quantized_indices, dtype=np.int32)  # Convert to numpy array
+    img = cv2.imread(filepath)
+    rsz_img = downscale(img=img)
+    lab_img = cv2.cvtColor(rsz_img, cv2.COLOR_BGR2Lab)
 
-    # In case 2 centers were quantized to the same color: remove duplicates, adapt weights
-    unique_ids, inverse = np.unique(
-        quantized_indices,
-        axis=0,
-        return_inverse=True
-        )
+    # Median-Filter auf a und b
+    l, a, b = cv2.split(lab_img)
+    a = cv2.medianBlur(a, ksize=3)
+    b = cv2.medianBlur(b, ksize=3)
 
-    aggregated_weights = np.bincount(inverse, weights=weights)
+    # In echten CIE-LAB Farbraum konvertieren
+    cie_lab = cv_to_cie(cv2.merge([l, a, b]))
 
-    # Create histogram vector of quantized colors
-    histogram_vector = np.zeros(quantized_cosine_LAB.shape[0], dtype=np.float32)
-    histogram_vector[unique_ids] = aggregated_weights
+    # Flach machen
+    pixels = cie_lab.reshape(-1, 3)
+    l, a, b = pixels[:, 0], pixels[:, 1], pixels[:, 2]
+
+    l_edges = np.linspace(0, 100, l_bins + 1)
+    a_edges = np.linspace(-128, 127, a_bins + 1)
+    b_edges = np.linspace(-128, 127, b_bins + 1)
+
+    l_idx = np.clip(np.digitize(l, l_edges) - 1, 0, l_bins - 1)
+    a_idx = np.clip(np.digitize(a, a_edges) - 1, 0, a_bins - 1)
+    b_idx = np.clip(np.digitize(b, b_edges) - 1, 0, b_bins - 1)
+
+    linear_idx = l_idx * (a_bins * b_bins) + a_idx * b_bins + b_idx   
+
+    total_bins = l_bins * a_bins * b_bins
+    histogram_vector = np.bincount(linear_idx, minlength=total_bins).astype(np.float32)
+
 
     if normalization == 'L1':
         histogram_vector /= np.sum(histogram_vector)
     else:   
         # L2 normalization
-        histogram_vector /= np.linalg.norm(histogram_vector, ord=2)
-
+        histogram_vector /= max(np.linalg.norm(histogram_vector), 1e-12)
     return histogram_vector
 
-def cosine_similarity(vector1: np.ndarray, vector2: np.ndarray) -> float:
+
+def get_bin_centers(l_bins: int, a_bins: int, b_bins: int) -> np.ndarray:
+    l_edges = np.linspace(0, 100, l_bins + 1)
+    a_edges = np.linspace(-128, 127, a_bins + 1)
+    b_edges = np.linspace(-128, 127, b_bins + 1)
+
+    l_centers = (l_edges[:-1] + l_edges[1:]) / 2
+    a_centers = (a_edges[:-1] + a_edges[1:]) / 2
+    b_centers = (b_edges[:-1] + b_edges[1:]) / 2
+
+    grid = np.array(np.meshgrid(l_centers, a_centers, b_centers, indexing='ij'))
+    return grid.reshape(3, -1).T
+
+
+def quantized_image_signed(filepath: str, l_bins: int, a_bins: int, b_bins: int, normalization: str) -> NDArray:
+    img = cv2.imread(filepath)
+    l, a, b = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2Lab))
+    a_denoised = cv2.medianBlur(a, ksize=3)
+    b_denoised = cv2.medianBlur(b, ksize=3)
+    cie_lab = cv_to_cie(cv2.merge([l, a_denoised, b_denoised]))
+    l_vals, a_vals, b_vals = cie_lab[:, :, 0].flatten(), cie_lab[:, :, 1].flatten(), cie_lab[:, :, 2].flatten()
+
+    # set bin-edges
+    l_edges = np.linspace(0, 100, l_bins + 1)
+    a_edges = np.linspace(0, 128, a_bins + 1)   # half a-dim since we combine neg-colors into 1 dim
+    b_edges = np.linspace(0, 128, b_bins + 1)   
+
+    total_bins = l_bins * a_bins * b_bins
+
+    # Masks to select pixel that "phase out" one another
+    masks = {
+        '+a +b': (a_vals >= 0) & (b_vals >= 0),
+        '-a -b': (a_vals <  0) & (b_vals <  0),
+        '+a -b': (a_vals >= 0) & (b_vals <  0),
+        '-a +b': (a_vals <  0) & (b_vals >= 0),
+    }
+
+    # 
+    all_idxs = []
+    all_weights = []
+
+    for label, mask in masks.items():
+        l_bin = l_vals[mask]
+        if label == '+a +b':
+            a_bin = a_vals[mask]
+            b_bin = b_vals[mask]
+            weight = +1
+        elif label == '-a -b':
+            a_bin = -a_vals[mask]
+            b_bin = -b_vals[mask]
+            weight = -1
+        elif label == '+a -b':
+            a_bin = a_vals[mask]
+            b_bin = -b_vals[mask]
+            weight = +1
+        elif label == '-a +b':
+            a_bin = -a_vals[mask]
+            b_bin = b_vals[mask]
+            weight = -1
+
+        l_idx = np.clip(np.digitize(l_bin, l_edges) - 1, 0, l_bins - 1)
+        a_idx = np.clip(np.digitize(a_bin, a_edges) - 1, 0, a_bins - 1)
+        b_idx = np.clip(np.digitize(b_bin, b_edges) - 1, 0, b_bins - 1)
+
+        # Linearize
+        linear_idx = l_idx * (a_bins * b_bins) + a_idx * b_bins + b_idx
+        all_idxs.append(linear_idx)
+        all_weights.append(np.full_like(linear_idx, weight, dtype=np.float32))
+
+    # Combine
+    full_idx = np.concatenate(all_idxs)
+    full_weights = np.concatenate(all_weights)
+    signed_histogram = np.bincount(full_idx, weights=full_weights, minlength=total_bins)
+
+    # Normalization
+    if normalization == 'L1':
+        norm = np.sum(np.abs(signed_histogram))
+    else:
+        norm = np.linalg.norm(signed_histogram, ord=2)  # L2
+
+    if norm > 0:
+        signed_histogram /= norm
+
+    return signed_histogram
+
+
+def quantized_image_two_vecs(filepath: str, l_bins: int, a_bins: int, b_bins: int, normalization: str) -> NDArray:
+    # Check if the normalization parameter is valid
+    if normalization not in ['L1', 'L2']:
+        raise ValueError(f"Normalization must be either 'L1' or 'L2', not '{normalization}'")
+
+    img = cv2.imread(filepath)
+    lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+
+    # Median-Filter auf a und b
+    l, a, b = cv2.split(lab_img)
+    a = cv2.medianBlur(a, ksize=3)
+    b = cv2.medianBlur(b, ksize=3)
+
+    # In echten CIE-LAB Farbraum konvertieren
+    cie_lab = cv_to_cie(cv2.merge([l, a, b]))
+
+    # Flach machen
+    pixels = cie_lab.reshape(-1, 3)
+    l, a, b = pixels[:, 0], pixels[:, 1], pixels[:, 2]
+
+    l_edges = np.linspace(0, 100, l_bins + 1)
+    a_edges = np.linspace(-128, 127, a_bins + 1)
+    b_edges = np.linspace(-128, 127, b_bins + 1)
+
+    l_idx = np.clip(np.digitize(l, l_edges) - 1, 0, l_bins - 1)
+    a_idx = np.clip(np.digitize(a, a_edges) - 1, 0, a_bins - 1)
+    b_idx = np.clip(np.digitize(b, b_edges) - 1, 0, b_bins - 1)
+
+    linear_idx_ab = a_idx * b_bins + b_idx  
+    linear_idx_l = l_idx 
+
+    total_bins_ab = a_bins * b_bins
+    histogram_vector_ab = np.bincount(linear_idx_ab, minlength=total_bins_ab).astype(np.float32)
+    histogram_vector_l = np.bincount(linear_idx_l, minlength=l_bins).astype(np.float32)
+
+    if normalization == 'L1':
+        histogram_vector_ab /= np.sum(histogram_vector_ab)
+        histogram_vector_l /= np.sum(histogram_vector_l)
+    else:   
+        # L2 normalization
+        histogram_vector_ab /= np.linalg.norm(histogram_vector_ab, ord=2)
+        histogram_vector_l /= np.linalg.norm(histogram_vector_l, ord=2)
+
+    return histogram_vector_ab, histogram_vector_l
+
+
+
+def cv_to_cie(img: NDArray) -> NDArray:
+    """Converts image in LAB-space from values ranges [[0,255], [0,255], [0,255]] (as in openCV) to [[0,100], [-128, 127], [-128, 127]] (the real CIE-LAB)
+    
+    Args:
+        img (NDArray): image in LAB-color space with range [[0,255], [0,255], [0,255]]
+        
+    Returns:
+        cie-img (NDArray): image with corrected value-range to match CIE-LAB space
     """
-    Function to calculate the cosine similarity between two vectors.
-    """
-    norm_a = np.linalg.norm(vector1)    # L2 normalize vectos
-    norm_b = np.linalg.norm(vector2)
-    if norm_a == 0 or norm_b == 0:   # Avoid division by zero
-        return 0.0
-    return np.dot(vector1, vector2) / (norm_a * norm_b)
+    l, a, b = cv2.split(img)
+    l = (l.astype(np.float32) / 255.0) * 100.0
+    a = a.astype(np.float32) - 128.0
+    b = b.astype(np.float32) - 128.0
+    return cv2.merge([l, a, b])
 
 
+def downscale(img:NDArray) -> NDArray:
+    "Downscales image if images reaches certain size. Magnitude of downscaling depends on image size."
+    size = img.shape[:2]
+    img_pxl_count = size[0] * size[1]
 
-if __name__ == "__main__":
-    centers, weights = extract_color_signature(filepath)
-    visualize_color_signature(centers, weights)
-    # centers1, weights1 = extract_color_signature(filepath1)
-    # centers2, weights2 = extract_color_signature(filepath2)
-    # dauer = timeit.timeit(lambda : compare_images(weights1, centers1, weights2, centers2), number=500_000)
-    # print(dauer)
+    size_dict = {
+        # every size below 2MP: no scaling
+        (4_000_000, 8_000_000): 0.7071,
+        (8_000_001, float(np.inf)): 0.5,
+    }
 
+    for intervall, scale_factor in size_dict.items():
+
+        # Check if pxl count in interval
+        if (intervall[0] <= img_pxl_count <= intervall[1]):
+            
+            # make work on row or col-like imgs
+            new_h = max(1,int(round(size[0]*scale_factor)))
+            new_w = max(1,int(round(size[1]*scale_factor)))
+            return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)  # resized
+
+    # Only catches if pxl count outside defined intervals
+    return img
