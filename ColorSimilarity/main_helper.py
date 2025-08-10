@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 import cv2 as cv
-from colorClusterquantized import *
+from ColorSimilarity.colorClusterquantized import *
 import time
 from pyemd import emd_with_flow
 
