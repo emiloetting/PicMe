@@ -3,3 +3,4 @@ __pycache__/
 ColorSimilarity/test_images/*
 ColorSimilarity/*.npy
 .venv/
+logos/*
