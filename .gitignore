@@ -4,3 +4,4 @@ ColorSimilarity/test_images/*
 ColorSimilarity/*.npy
 .venv/
 logos/*
+!logos/PicMe_logo_cleaned.png
