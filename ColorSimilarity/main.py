@@ -62,7 +62,8 @@ if single_double == 'double':
             a_bins=A_BINS,
             b_bins=B_BINS,
             emd_cost_mat=cost_matrix,
-            batch_size=10,
+            img_weights=[.5, 1.5],
+            batch_size=7,
             track_time=True,
             show=True
         )

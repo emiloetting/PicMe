@@ -120,7 +120,7 @@ def downscale(img:NDArray) -> NDArray:
     return img
 
 
-def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int, normalization: str) -> NDArray:
+def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int, normalization: str, weights: list[float]=[1.0, 1.0]) -> NDArray:
     """Creates combined histogram of 2 input images.
     
     Args:
@@ -129,6 +129,7 @@ def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int,
         a_bins (int): Amount of bins on a-channel
         b_bins (int): Amount of bins on b-channel
         normalization (str): Type of normalization to apply ('L1' or 'L2')
+        weights (list[float]): Weights for each image's histogram contribution. Sum must be 2 and each weight must be positive.
 
     Returns:
         histogram_vector (NDArray): Normalized combined histogram vector of quantized colors in origian CIE-LAB 
@@ -138,10 +139,22 @@ def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int,
     elif len(filepaths) != 2:
         raise ValueError(f"Invalid amount of image paths in argument 'filepaths'. Expected 2, got {len(filepaths)}")
 
+    assert np.sum(weights) == 2, f"Weights must sum to 2. Current sum: {np.sum(weights)}"
+
+
+    # Check how weights are balanced and skip unnecessary computations
+    if float(weights[0]) == 0.0:
+        return quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization)
+
+    elif float(weights[1]) == 0.0:   # second weight == 0: calculate only first
+        return quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization)
+
+    # Both weights are non-zero, proceed with full calculation
     # Calc individual hists
-    hist_1 = quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=None)
-    hist_2 = quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=None)
+    hist_1 = quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L1')*float(weights[0])
+    hist_2 = quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L1')*float(weights[1])
     combined_hist = np.sum([hist_1, hist_2], axis=0)
+
 
     # Normalize sum as well
     if normalization == 'L1':

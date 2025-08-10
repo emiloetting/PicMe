@@ -36,7 +36,7 @@ def presort_sims(sims: NDArray, relative_tresh: float) -> list[NDArray]:
     return [filtered_indices, filtered_distances]
 
 
-def visualize(img_path: list[str], sim_imgs: list, cos_vals: NDArray, emd_dists: list[float]|None, final_metric: NDArray|None, sort_by: str):
+def visualize(img_path: list[str], sim_imgs: list, cos_vals: NDArray, emd_dists: list[float]|None, final_metric: NDArray|None, sort_by: str, img_weights: list[float]|None=None):
     """Opens matplotlib visualization of top-5 images based on cosine similarities and EMD histograms.
 
     Args:
@@ -46,6 +46,7 @@ def visualize(img_path: list[str], sim_imgs: list, cos_vals: NDArray, emd_dists:
         emd_dists (list[float]|None): List of EMD distances. 
         final_metric (NDArray|None): Array of values providing final metric: smallest values -> best fit.
         sort_by (str): Sorting criteria for the images ('cosine', 'emd', 'final'). Must be 'cosine' if at least one of [emd_dists, final_metric] not provided.
+        img_weights (list[float]|None): Weights for each image's contribution to the final metric. Must sum to 2.
     """
     assert sort_by in ['cosine', 'emd', 'final'], f"Invalid sort_by value: {sort_by}. Expected one of ['cosine', 'emd', 'final']"
     assert len(sim_imgs) == len(cos_vals), f"Length of sim_imgs ({len(sim_imgs)}) does not match length of cos_vals ({len(cos_vals)})"
@@ -83,12 +84,18 @@ def visualize(img_path: list[str], sim_imgs: list, cos_vals: NDArray, emd_dists:
         # Display first input image
         axs[0, 0].imshow(cv.imread(img_path[0])[..., ::-1])   # BGR to RGB by rearranging channels -> plt reads img as RGB
         axs[0, 0].axis('off')
-        axs[0, 0].set_title('Input')
+        if img_weights is not None:
+            axs[0, 0].set_title(f'Input 1\nWeight: {img_weights[0]}')
+        else:
+            axs[0, 0].set_title('Input 1')
 
         # Display second input image
         axs[1, 0].imshow(cv.imread(img_path[1])[..., ::-1])   # BGR to RGB by rearranging channels -> plt reads img as RGB
         axs[1, 0].axis('off')
-        axs[1, 0].set_title('Input')
+        if img_weights is not None:
+            axs[1, 0].set_title(f'Input 2\nWeight: {img_weights[1]}')
+        else:
+            axs[1, 0].set_title('Input 2')
 
     # Top 5 Kandidaten (nach EMD sortiert)
     for col, tup in enumerate(sim_list[:5], start=1):
@@ -133,6 +140,7 @@ def work_that_vectors(input_vec_l1: NDArray,
                     l1_emb: NDArray, 
                     l2_emb: NDArray, 
                     emd_cost_mat: NDArray|None, 
+                    img_weights: list[float]|None=None,
                     batch_size: int=10,
                     track_time: bool=False,
                     show: bool=False) -> NDArray:
@@ -147,6 +155,7 @@ def work_that_vectors(input_vec_l1: NDArray,
         l1_emb (NDArray): The L1 embeddings of the database images.
         l2_emb (NDArray): The L2 embeddings of the database images.
         emd_cost_mat (NDArray|None): The cost matrix for EMD calculation.
+        img_weights (list[float]|None): Weights for each image's contribution to the final metric. Must sum to 2 and each weight must be positive.
         batch_size (int, optional): The batch size for processing. Defaults to 10.
         track_time (bool, optional): Whether to track processing time and display in terminal. Defaults to False.
         show (bool, optional): Whether to display results in matplotlib window. Defaults to False.
@@ -203,10 +212,10 @@ def work_that_vectors(input_vec_l1: NDArray,
         
         if show:
             if batch_start == 0:
-                visualize(input_img_paths, similar_images, cosine_values, emd_values, final_metrics, sort_by='final')
+                visualize(input_img_paths, similar_images, cosine_values, emd_values, final_metrics, sort_by='final', img_weights=img_weights)
             else:
-                visualize(input_img_paths, similar_images, cosine_values, None, None, sort_by='cosine')
-    
+                visualize(input_img_paths, similar_images, cosine_values, None, None, sort_by='cosine', img_weights=img_weights)
+
     # filled list of paths in descending order of similarity
     return sim_ordered_paths
 
@@ -266,6 +275,7 @@ def color_match_double(img_paths: list[str],
                         l2_emb: NDArray, 
                         l_bins: int, a_bins: int, b_bins: int, 
                         emd_cost_mat: NDArray|None, 
+                        img_weights: list[float]=[1.0, 1.0],
                         batch_size: int=10,
                         track_time: bool=False,
                         show: bool=False) -> NDArray:
@@ -273,8 +283,7 @@ def color_match_double(img_paths: list[str],
     """Finds the most similar image in the database for a pair of input images based on cosine similarity and EMD of LAB-space histograms.
 
     Args:
-        img_path1 (str): Path to the first input image.
-        img_path2 (str): Path to the second input image.
+        img_paths (list[str]): List containing the paths to the input images. Must contain exactly two image paths.
         db_img_paths (list[str]): List of paths to the database images.
         l1_emb (NDArray): L1 embedding matrix.
         l2_emb (NDArray): L2 embedding matrix.
@@ -282,6 +291,7 @@ def color_match_double(img_paths: list[str],
         a_bins (int): Number of bins for the A channel.
         b_bins (int): Number of bins for the B channel.
         emd_cost_mat (NDArray|None): Cost matrix for EMD calculation.
+        img_weights (list[float]): Weights for each image's histogram contribution. Sum must be 2.
         batch_size (int, optional): Size of the batches for processing. Defaults to 10.
         track_time (bool, optional): Whether to track processing time and display in terminal. Defaults to False.
         show (bool, optional): Whether to show visualization in matplotlib. Defaults to False.
@@ -301,11 +311,11 @@ def color_match_double(img_paths: list[str],
     # Calc L1 and L2 normalized vectors for both images
     combined_vec_l1 = quantize2images(filepaths=[img_path1, img_path2],
                                       l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
-                                      normalization='L1').astype(np.float64)
+                                      normalization='L1', weights=img_weights).astype(np.float64)
 
     combined_vec_l2 = quantize2images(filepaths=[img_path1, img_path2],
                                       l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
-                                      normalization='L2').astype(np.float64)
+                                      normalization='L2', weights=img_weights).astype(np.float64)
 
     if track_time:
         print(f'Hists for input took: {time.time()-start:.3f}s')
@@ -319,6 +329,7 @@ def color_match_double(img_paths: list[str],
                       l1_emb=l1_emb, 
                       l2_emb=l2_emb, 
                       emd_cost_mat=emd_cost_mat,
+                      img_weights=img_weights,
                       batch_size=batch_size,
                       track_time=track_time,
                       show=show)
