@@ -1,40 +1,54 @@
-import os
+import json
 import torch
 import clip
 from PIL import Image
 from annoy import AnnoyIndex
+from pathlib import Path
+import tqdm
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 
 
-def get_image_embedding(image_path):
+def image_embeddings_with_paths(folder_path):
+    """creates a generator that yields tuples of (image_path, embedding)"""
+    folder = Path(folder_path)
+    image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif"]
+    
+    for pattern in image_extensions:
+        for image_path in tqdm.tqdm(folder.rglob(pattern)):
+            try:
+                image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    embedding = model.encode_image(image).squeeze().cpu().numpy()
+                yield str(image_path), embedding
+            except Exception as e:
+                print(f"Error processing {image_path}: {e}")
 
-    image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
-    with torch.no_grad():
-        image_features = model.encode_image(image).float()
 
-    embedding_flat = image_features.squeeze().numpy()
-    return embedding_flat
-
-
-
-def create_ann(folder_path: str):
+def create_ann(folder_path):
+    """creates an AnnoyIndex and mapping and saves it"""
     index = AnnoyIndex(512, 'angular')
-
-    for filename in os.listdir(folder_path):
-        image_path = os.path.join(folder_path, filename)
-        embedding = get_image_embedding(image_path)
-        index.add_item(index.get_n_items(), embedding)
-
-    index.build(10)
-
-    index.save("test_pictures.ann")
-
-    return None
-
+    path_mapping = {}
+    
+    for i, (image_path, embedding) in tqdm.tqdm(enumerate(image_embeddings_with_paths(folder_path))):
+        try:
+            index.add_item(i, embedding)
+            path_mapping[i] = image_path
+        except Exception as e:
+            print(f"Error adding {image_path} to index: {e}")
+    
+    index.build(20)
+    index.save("500k.ann")
+    
+    with open("test_pictures_paths.json", "w") as f:
+        json.dump(path_mapping, f)
+    
+    return path_mapping
 
 
 if __name__ == "__main__":
-    create_ann(r"C:\Users\joche\Documents\BigData\Repo\PicMe\ObjectSimilarity\Testbilder")
+    mapping = create_ann(r"E:\data\image_data\500k")
+    print(f" {len(mapping)} images")
+
