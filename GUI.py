@@ -218,6 +218,31 @@ class GUI(QMainWindow):
         self.second_box = None
         self.left_layout.addStretch()
 
+        # Button to find best match
+        bottom_bar = QWidget()
+        bottom_h = QHBoxLayout(bottom_bar)
+        bottom_h.setContentsMargins(0, 8, 0, 0)
+        self.find_btn = QPushButton("Find best matches")
+        self.find_btn.setObjectName("FindBtn")
+        self.find_btn.setMinimumHeight(48)
+        self.find_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.find_btn.clicked.connect(self.on_find_best_matches)
+        self.find_btn.setStyleSheet("""
+        QPushButton {
+        color: #FFFFFF;
+        background: #76adf5;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 18px;
+        font: 600 13pt "Segoe UI";
+        }
+        QPushButton:hover  { background: #2aa037; }   /* Mouse over */
+        QPushButton:pressed{ background: #1c6b2b; }   /* Mouse down */
+        QPushButton:disabled{ background: #3a3f46; color:#8a9099; }
+        """)
+
+        self.left_layout.addWidget(self.find_btn)
+
         # Rechte Seite Placeholder
         right_placeholder = QLabel("Best fitting images")
         right_placeholder.setAlignment(Qt.AlignCenter)
@@ -262,6 +287,10 @@ class GUI(QMainWindow):
                     # Nur wenn ein Bild vorhanden ist, Höhe neu fitten und Pixmap updaten
                     box._fit_height_to_image()
                     box._update_scaled_pixmap()
+    
+    def on_find_best_matches(self):
+        print("Find best matches clicked")
+        # TODO: Matching-Logik hier aufrufen
 
 
 if __name__ == "__main__":
