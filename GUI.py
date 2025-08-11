@@ -1,304 +1,259 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
-from PyQt5.QtCore import *
+# -*- coding: utf-8 -*-
 import sys, os
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QLabel, QFrame, QToolButton, QPushButton, QSizePolicy, QGridLayout
+)
+from PyQt5.QtGui import QPixmap, QIcon, QImage, QFont
+from PyQt5.QtCore import Qt, QSize
 
 
-# Drag&Drop-Box: nur proportional skalieren (KeepAspectRatio), kein Drehen, kein Stretching.
-# Vor dem ersten Drop bleibt die Box klein; erst NACH dem Drop darf sie sich leicht nach unten vergrößern.
+# -------- Drop-Label: nimmt lokale Bilddateien an und merkt den Pfad --------
 class DragDropLabel(QLabel):
     exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
-    imagePathChanged = pyqtSignal(object)  # str oder None
 
-    def __init__(self, text="Drop image here", parent=None):
+    def __init__(self, text="", parent=None):
         super().__init__(text, parent)
-        self.current_path = None
-        self.setObjectName("DashedBox")
-        self.setAlignment(Qt.AlignCenter)
         self.setAcceptDrops(True)
-        self.setScaledContents(False)              # Wir skalieren selbst, immer mit KeepAspectRatio
-        self.setMinimumHeight(120)                 # Start klein
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        self._orig_pm = None                       # erst nach Drop vorhanden
-        self._inset = 0                            # Bild darf die Box an 2 gegenüberliegenden Kanten berühren
+        self.setAlignment(Qt.AlignCenter)
+        self.setWordWrap(True)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.current_path = None         # <-- hier merken wir den Pfad
+        self._orig = None                # Original-Pixmap für sauberes Rescale
 
-    # --- Drag & Drop ---
     def dragEnterEvent(self, e):
-        if self._ok(e.mimeData()):
-            e.acceptProposedAction()
-            self._set_drag_active(True)
-
-    def dragMoveEvent(self, e):
-        if self._ok(e.mimeData()):
-            e.acceptProposedAction()
-
-    def dragLeaveEvent(self, e):
-        self._set_drag_active(False)
+        md = e.mimeData()
+        if md.hasUrls():
+            for u in md.urls():
+                if u.isLocalFile() and os.path.splitext(u.toLocalFile())[1].lower() in self.exts:
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
 
     def dropEvent(self, e):
-        self._set_drag_active(False)
-        path = self._first_local_image_path(e.mimeData())
-        if path:
-            # Bild laden ohne Auto-Rotation (kein Drehen)
-            reader = QImageReader(path)
-            reader.setAutoTransform(True)
-            img = reader.read()
-            if not img.isNull():
-                self._orig_pm = QPixmap.fromImage(img)
-                self.current_path = path
-                # Höhe jetzt passend machen (leicht wachsen erlaubt, aber gedeckelt)
-                self._fit_height_to_image()
-                self._update_scaled_pixmap()
-                self.setText("")  # Platzhaltertext weg
-                self.imagePathChanged.emit(path)  # <--- NEU: Pfad melden
-                e.acceptProposedAction()
+        md = e.mimeData()
+        if md.hasUrls():
+            for u in md.urls():
+                if u.isLocalFile():
+                    path = u.toLocalFile()
+                    if os.path.splitext(path)[1].lower() in self.exts and os.path.isfile(path):
+                        pm = QPixmap(path)
+                        if not pm.isNull():
+                            self._orig = pm
+                            self.current_path = path
+                            self.setText("")  # Platzhalter ausblenden
+                            self._rescale()
+                            e.acceptProposedAction()
+                            return
+        e.ignore()
 
     def resizeEvent(self, ev):
+        if self._orig is not None:
+            self._rescale()
         super().resizeEvent(ev)
-        # Vor dem ersten Drop NICHT vergrößern – nur wenn Bild vorhanden ist.
-        if self._orig_pm is not None:
-            self._fit_height_to_image()
-            self._update_scaled_pixmap()
 
-    # --- Rendering: immer KeepAspectRatio (inside fit) ---
-    def _update_scaled_pixmap(self):
-        if self._orig_pm is None:
+    def clear_image(self, placeholder=""):
+        self._orig = None
+        self.current_path = None
+        self.setPixmap(QPixmap())
+        self.setText(placeholder)
+
+    def _rescale(self):
+        if self._orig is None or self.width() <= 0 or self.height() <= 0:
             return
-        cr = self.contentsRect()
-        target_w = max(1, cr.width()  - 2 * self._inset)
-        target_h = max(1, cr.height() - 2 * self._inset)
-        pm_scaled = self._orig_pm.scaled(QSize(target_w, target_h),
-                                         Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        super().setPixmap(pm_scaled)
-
-    # --- Boxhöhe leicht an Bild anpassen (aber nicht riesig); VOR Drop bleibt Höhe klein ---
-    def _fit_height_to_image(self):
-        if self._orig_pm is None or self.width() <= 0:
-            return
-        img_w = self._orig_pm.width()
-        img_h = self._orig_pm.height()
-        if img_w <= 0:
-            return
-
-        # Höhe, die nötig wäre, damit das Bild bei voller Boxbreite komplett sichtbar ist
-        avail_w = max(1, self.contentsRect().width() - 2 * self._inset)
-        needed_h = int((img_h / img_w) * avail_w) + 2 * self._inset
-
-        # „Leicht“ wachsen, aber gedeckelt (z. B. max 50% der Fensterhöhe)
-        win = self.window()
-        max_h_cap = 260
-        if isinstance(win, QWidget) and win.height() > 0:
-            max_h_cap = max(120, int(win.height() * 0.18))  # vorher ~0.35
-        min_h = 120
-
-        new_h = max(min_h, min(needed_h, max_h_cap))
-        self.setMinimumHeight(min_h)
-        self.setMaximumHeight(max_h_cap)
-        self.setFixedHeight(new_h)
-
-    # --- Helfer ---
-    def _ok(self, md: QMimeData) -> bool:
-        if md.hasUrls():
-            return self._first_local_image_path(md) is not None
-        return md.hasImage()
-
-    def _first_local_image_path(self, md: QMimeData):
-        if not md.hasUrls():
-            return None
-        for url in md.urls():
-            if url.isLocalFile():
-                p = url.toLocalFile()
-                _, e = os.path.splitext(p)
-                if e.lower() in self.exts and os.path.isfile(p):
-                    return p
-        return None
-
-    def _set_drag_active(self, active: bool):
-        if self.property("dragActive") != active:
-            self.setProperty("dragActive", active)
-            self.style().unpolish(self)
-            self.style().polish(self)
-            self.update()
+        pm = self._orig.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        super().setPixmap(pm)
 
 
+# -------- Thumbnail-Label fürs rechte Grid (skaliert mit) --------
+class ThumbLabel(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._orig = None
+        self.setAlignment(Qt.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setStyleSheet("background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px;")
+
+    def setPixmap(self, pm: QPixmap):
+        self._orig = pm if (pm and not pm.isNull()) else None
+        super().setPixmap(self._scaled())
+
+    def resizeEvent(self, e):
+        if self._orig is not None:
+            super().setPixmap(self._scaled())
+        super().resizeEvent(e)
+
+    def _scaled(self):
+        if self._orig is None or self.width() <= 0 or self.height() <= 0:
+            return QPixmap()
+        return self._orig.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+
+# ------------------------------- GUI -------------------------------
 class GUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.init_GUI()
 
     def init_GUI(self):
-        # Fenster: 75% des Bildschirms, zentriert (bleibt fix; wir ändern die Fenstergröße nie automatisch)
-        screen_rect = QApplication.desktop().screenGeometry()
-        window_w = int(screen_rect.width() * 0.75)
-        window_h = int(screen_rect.height() * 0.75)
-        x_position = (screen_rect.width() - window_w) // 2
-        y_position = (screen_rect.height() - window_h) // 2
-
+        # Window
         self.setWindowTitle("PicMe - Pixel-Informed Content-Matching Engine")
-        self.setGeometry(x_position, y_position, window_w, window_h)
+        self.resize(1200, 800)
         self.setWindowIcon(QIcon(os.path.join("logos", "PicMe_logo.png")))
-
-        # Styles (für QLabel#DashedBox)
         self.setStyleSheet("""
         QMainWindow { background-color: #011126; }
-
-        QLabel#DashedBox {
+        QFrame#DashedBox {
             border: 2px dashed #9aa0a6;
             border-radius: 8px;
             background: rgba(255,255,255,0.03);
-            color: #E6EDF3;
-            font-size: 12pt;
         }
-        QLabel#DashedBox[dragActive="true"] {
-            border-color: #4aa3ff;
-            background: rgba(74,163,255,0.08);
-        }
-
+        #DashedBox QLabel { color: #E6EDF3; font-size: 12pt; qproperty-alignment: AlignCenter; }
         QToolButton#ToggleBtn {
-            color: #FFFFFF;
-            background: #0E223F;
-            border: 1px solid #3c5270;
-            border-radius: 4px;
-            font-weight: 700;
+            color: #FFFFFF; background: #0E223F; border: 1px solid #3c5270; border-radius: 4px; font-weight: 700;
         }
         QToolButton#ToggleBtn:hover { background: #153055; }
         QToolButton#ToggleBtn:pressed { background: #0a1c36; }
+        QPushButton#FindBtn {
+            color:#fff; background:#2ea043; border:none; border-radius:8px; padding:10px 18px; font:600 13pt "Segoe UI";
+        }
+        QPushButton#FindBtn:hover  { background:#2aa037; }
+        QPushButton#FindBtn:pressed{ background:#238636; }
         """)
 
-        # Layout (links/rechts)
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        self.main_layout = QHBoxLayout(central_widget)
-        self.main_layout.setContentsMargins(16, 16, 16, 16)
-        self.main_layout.setSpacing(16)
+        # Main layout
+        central = QWidget(); self.setCentralWidget(central)
+        main = QHBoxLayout(central); main.setContentsMargins(16,16,16,16); main.setSpacing(16)
 
-        # Linke Spalte
-        self.left_col = QWidget()
-        self.left_layout = QVBoxLayout(self.left_col)
-        self.left_layout.setContentsMargins(0, 0, 0, 0)
-        self.left_layout.setSpacing(12)
-        self.left_col.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        # Left column
+        left_col = QWidget(); self.left_layout = QVBoxLayout(left_col)
+        self.left_layout.setContentsMargins(0,0,0,0); self.left_layout.setSpacing(12)
+        left_col.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        # Rechte Spalte
-        right_col = QWidget()
-        right_col.setStyleSheet("QLabel { color: #FFFFFF; font-size: 25px; font-family: Cambria; }")
-        right_layout = QVBoxLayout(right_col)
-        
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_col.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        # Right column
+        right_col = QWidget(); right_layout = QVBoxLayout(right_col)
+        right_layout.setContentsMargins(0,0,0,0); right_layout.setSpacing(12)
+        right_col.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.main_layout.addWidget(self.left_col)
-        self.main_layout.addWidget(right_col)
-        self.main_layout.setStretch(0, 3)  # 30%
-        self.main_layout.setStretch(1, 7)  # 70%
+        main.addWidget(left_col, 3)
+        main.addWidget(right_col, 7)
 
-        # Logo oben links
-        logo_container = QWidget()
-        logo_layout = QHBoxLayout(logo_container)
-        logo_layout.setContentsMargins(0, 0, 0, 0)
-        logo_label = QLabel()
-        logo_pixmap = QPixmap(os.path.join("logos", "PicMe_logo_cleaned.png"))
-        if not logo_pixmap.isNull():
-            logo_label.setPixmap(logo_pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        else:
-            logo_label.setText("PicMe")
-        logo_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        logo_layout.addWidget(logo_label)
-        self.left_layout.addWidget(logo_container)
+        # Logo (optional)
+        logo_wrap = QWidget(); logo_h = QHBoxLayout(logo_wrap); logo_h.setContentsMargins(0,0,0,0)
+        logo = QLabel()
+        pm = QPixmap(os.path.join("logos", "PicMe_logo_cleaned.png"))
+        logo.setPixmap(pm.scaled(220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation) if not pm.isNull() else QPixmap())
+        logo_h.addWidget(logo)
+        self.left_layout.addWidget(logo_wrap)
 
-        # Erste Drop-Box (startet klein; wächst erst nach Bild-Drop)
-        self.box1 = DragDropLabel("Drop image here")
-        self.left_layout.addWidget(self.box1)
+        # Box 1
+        self.box1_frame = QFrame(); self.box1_frame.setObjectName("DashedBox")
+        box1_lay = QVBoxLayout(self.box1_frame); box1_lay.setContentsMargins(12,12,12,12)
+        self.box1 = DragDropLabel("Drop image here"); box1_lay.addWidget(self.box1)
+        self.left_layout.addWidget(self.box1_frame)
 
-        # Toggle-Button (zweite Box)
-        self.toggle_btn = QToolButton()
-        self.toggle_btn.setObjectName("ToggleBtn")
-        self.toggle_btn.setText("+")
-        self.toggle_btn.setAutoRaise(False)
-        self.toggle_btn.setFixedSize(28, 28)
+        # Toggle (+/-) für zweite Box
+        self.toggle_btn = QToolButton(); self.toggle_btn.setObjectName("ToggleBtn")
+        self.toggle_btn.setText("+"); self.toggle_btn.setFixedSize(28,28)
         self.toggle_btn.clicked.connect(self.toggle_second_box)
         self.left_layout.addWidget(self.toggle_btn)
 
-        # Platz für zweite Box
+        # Zweite Box (start: None)
+        self.second_box_frame = None
         self.second_box = None
+
         self.left_layout.addStretch()
 
-        # Button to find best match
-        bottom_bar = QWidget()
-        bottom_h = QHBoxLayout(bottom_bar)
-        bottom_h.setContentsMargins(0, 8, 0, 0)
-        self.find_btn = QPushButton("Find best matches")
-        self.find_btn.setObjectName("FindBtn")
-        self.find_btn.setMinimumHeight(48)
-        self.find_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Bottom Button
+        bottom = QWidget(); bh = QHBoxLayout(bottom); bh.setContentsMargins(0,8,0,0)
+        self.find_btn = QPushButton("Find best matches"); self.find_btn.setObjectName("FindBtn"); self.find_btn.setMinimumHeight(46)
         self.find_btn.clicked.connect(self.on_find_best_matches)
-        self.find_btn.setStyleSheet("""
-        QPushButton {
-        color: #FFFFFF;
-        background: #76adf5;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 18px;
-        font: 600 13pt "Segoe UI";
-        }
-        QPushButton:hover  { background: #2aa037; }   /* Mouse over */
-        QPushButton:pressed{ background: #1c6b2b; }   /* Mouse down */
-        QPushButton:disabled{ background: #3a3f46; color:#8a9099; }
-        """)
+        bh.addWidget(self.find_btn)
+        self.left_layout.addWidget(bottom)
 
-        self.left_layout.addWidget(self.find_btn)
+        # Right placeholder + Grid
+        self.right_placeholder = QLabel("Best fitting images"); self.right_placeholder.setAlignment(Qt.AlignCenter)
+        self.right_placeholder.setStyleSheet("color:#E6EDF3; font-size:18px;")
+        right_layout.addWidget(self.right_placeholder)
 
-        # Rechte Seite Placeholder
-        right_placeholder = QLabel("Best fitting images")
-        right_placeholder.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(right_placeholder)
+        self.grid_widget = QWidget(); self.grid_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.right_grid = QGridLayout(self.grid_widget); self.right_grid.setContentsMargins(0,0,0,0); self.right_grid.setSpacing(10)
+        right_layout.addWidget(self.grid_widget, 1)
+        self.grid_widget.setVisible(False)
 
-        # 30%-Max-Breite links, aber: vor erstem Drop KEINE Höhenänderung
-        self._apply_left_max_width()
+        self.grid_labels = []    # wird beim ersten Klick gebaut
+        # Liste der Match-Pfade (nur diese landen im Grid)
+        self.match_paths = []
 
+    # --- Build 4x3 grid once ---
+    def _build_grid(self, rows=4, cols=3):
+        if self.grid_labels:
+            return
+        for idx in range(rows*cols):
+            lbl = ThumbLabel()
+            self.right_grid.addWidget(lbl, idx // cols, idx % cols)
+            self.grid_labels.append(lbl)
+
+    # --- Set images into grid from a list of paths (sorted left→right, top→bottom) ---
+    def set_grid_images(self, paths):
+        paths = [p for p in paths if p]
+        for i, lbl in enumerate(self.grid_labels):
+            if i < len(paths) and os.path.isfile(paths[i]):
+                pm = QPixmap(paths[i])
+                lbl.setPixmap(pm)
+            else:
+                lbl.setPixmap(QPixmap())
+
+    # --- Extern deine Ergebnisliste setzen (optional nutzbar) ---
+    def set_match_paths(self, paths):
+        self.match_paths = list(paths or [])
+
+    # --- Button handler ---
+    def on_find_best_matches(self):
+        # 1) Pfade der aktuell gedroppten Bilder links drucken
+        current = self.get_current_paths()
+        print("Files:", current if current else "Keine Dateien gedroppt.")
+
+        # 2) Grid einmalig bauen und anzeigen
+        if not self.grid_labels:
+            self._build_grid(rows=4, cols=3)
+        if self.right_placeholder.isVisible():
+            self.right_placeholder.setVisible(False)
+        self.grid_widget.setVisible(True)
+
+        # 3) Nur DEINE Liste ins Grid laden (alphabetisch)
+        paths_for_grid = sorted(self.match_paths)
+        self.set_grid_images(paths_for_grid)
+
+    # --- Aktuell gedroppte Pfade aus den linken Boxen ---
+    def get_current_paths(self):
+        out = []
+        if getattr(self.box1, "current_path", None):
+            out.append(self.box1.current_path)
+        if self.second_box and getattr(self.second_box, "current_path", None):
+            out.append(self.second_box.current_path)
+        return out
+
+    # --- Plus/Minus für zweite Box ---
     def toggle_second_box(self):
         if self.second_box is None:
-            self.second_box = DragDropLabel("Drop second image")
-            idx_box1 = self.left_layout.indexOf(self.box1)
-            self.left_layout.insertWidget(idx_box1 + 1, self.second_box)
+            # Frame + Label bauen
+            self.second_box_frame = QFrame(); self.second_box_frame.setObjectName("DashedBox")
+            box2_lay = QVBoxLayout(self.second_box_frame); box2_lay.setContentsMargins(12,12,12,12)
+            self.second_box = DragDropLabel("Add second image")
+            box2_lay.addWidget(self.second_box)
+
+            # unter Box1 einfügen
+            idx = self.left_layout.indexOf(self.box1_frame)
+            self.left_layout.insertWidget(idx + 1, self.second_box_frame)
+
             self.toggle_btn.setText("−")
-            self.toggle_btn.setToolTip("Zweites Rechteck entfernen")
         else:
-            self.left_layout.removeWidget(self.second_box)
-            self.second_box.deleteLater()
+            # entfernen
+            self.left_layout.removeWidget(self.second_box_frame)
+            self.second_box_frame.deleteLater()
+            self.second_box_frame = None
             self.second_box = None
             self.toggle_btn.setText("+")
-            self.toggle_btn.setToolTip("Weiteres Rechteck hinzufügen")
-
-        self.left_layout.removeWidget(self.toggle_btn)
-        last_box = self.second_box if self.second_box is not None else self.box1
-        last_idx = self.left_layout.indexOf(last_box)
-        self.left_layout.insertWidget(last_idx + 1, self.toggle_btn)
-
-        self._apply_left_max_width()
-
-    def resizeEvent(self, e: QResizeEvent):
-        super().resizeEvent(e)
-        self._apply_left_max_width()   # Fenstergröße bleibt; Boxbreite wird nur gedeckelt
-
-    # Box-Breite links max. 30% Fensterbreite; KEINE Höhenänderung vor dem ersten Bild
-    def _apply_left_max_width(self):
-        outer_margin = 16
-        max_w = max(200, int(self.width() * 0.30) - 2 * outer_margin)
-        for box in (self.box1, self.second_box):
-            if box is not None:
-                box.setMaximumWidth(max_w)
-                if box._orig_pm is not None:
-                    # Nur wenn ein Bild vorhanden ist, Höhe neu fitten und Pixmap updaten
-                    box._fit_height_to_image()
-                    box._update_scaled_pixmap()
-    
-    def on_find_best_matches(self):
-        print("Find best matches clicked")
-        paths = []
-        if getattr(self.box1, "current_path", None): paths.append(self.box1.current_path)
-        if self.second_box and getattr(self.second_box, "current_path", None): paths.append(self.second_box.current_path)
-        print("Files:\n", paths, '\n'if paths else "Keine Dateien gedroppt.\n")
 
 
 if __name__ == "__main__":
