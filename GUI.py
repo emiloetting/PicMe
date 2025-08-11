@@ -8,9 +8,11 @@ import sys, os
 # Vor dem ersten Drop bleibt die Box klein; erst NACH dem Drop darf sie sich leicht nach unten vergrößern.
 class DragDropLabel(QLabel):
     exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
+    imagePathChanged = pyqtSignal(object)  # str oder None
 
     def __init__(self, text="Drop image here", parent=None):
         super().__init__(text, parent)
+        self.current_path = None
         self.setObjectName("DashedBox")
         self.setAlignment(Qt.AlignCenter)
         self.setAcceptDrops(True)
@@ -43,10 +45,12 @@ class DragDropLabel(QLabel):
             img = reader.read()
             if not img.isNull():
                 self._orig_pm = QPixmap.fromImage(img)
+                self.current_path = path
                 # Höhe jetzt passend machen (leicht wachsen erlaubt, aber gedeckelt)
                 self._fit_height_to_image()
                 self._update_scaled_pixmap()
                 self.setText("")  # Platzhaltertext weg
+                self.imagePathChanged.emit(path)  # <--- NEU: Pfad melden
                 e.acceptProposedAction()
 
     def resizeEvent(self, ev):
@@ -179,6 +183,7 @@ class GUI(QMainWindow):
         right_col = QWidget()
         right_col.setStyleSheet("QLabel { color: #FFFFFF; font-size: 25px; font-family: Cambria; }")
         right_layout = QVBoxLayout(right_col)
+        
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_col.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
@@ -253,7 +258,7 @@ class GUI(QMainWindow):
 
     def toggle_second_box(self):
         if self.second_box is None:
-            self.second_box = DragDropLabel("Add second image")
+            self.second_box = DragDropLabel("Drop second image")
             idx_box1 = self.left_layout.indexOf(self.box1)
             self.left_layout.insertWidget(idx_box1 + 1, self.second_box)
             self.toggle_btn.setText("−")
@@ -290,7 +295,10 @@ class GUI(QMainWindow):
     
     def on_find_best_matches(self):
         print("Find best matches clicked")
-        # TODO: Matching-Logik hier aufrufen
+        paths = []
+        if getattr(self.box1, "current_path", None): paths.append(self.box1.current_path)
+        if self.second_box and getattr(self.second_box, "current_path", None): paths.append(self.second_box.current_path)
+        print("Files:\n", paths, '\n'if paths else "Keine Dateien gedroppt.\n")
 
 
 if __name__ == "__main__":
