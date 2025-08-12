@@ -2,7 +2,7 @@
 import sys, os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QFrame, QToolButton, QPushButton, QSizePolicy, QGridLayout, QSlider
+    QLabel, QFrame, QToolButton, QPushButton, QSizePolicy, QGridLayout, QSlider, QRadioButton, QButtonGroup
 )
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
@@ -189,6 +189,40 @@ class GUI(QMainWindow):
         for lbl in (self.s1_label, self.s1_value, self.s2_label, self.s2_value):
             lbl.setStyleSheet("color: #FFFFFF; font-size: 13pt;")
 
+        # --- Multiple-Choice (immer sichtbar) ---
+        self.choice_panel = QWidget()
+        choice_row = QHBoxLayout(self.choice_panel)
+        choice_row.setContentsMargins(0, 4, 0, 0)
+
+        self.rb_color   = QRadioButton("Color")
+        self.rb_objects = QRadioButton("Objects")
+        self.rb_both    = QRadioButton("Both")
+
+        # Styling
+        for rb in (self.rb_color, self.rb_objects, self.rb_both):
+            rb.setStyleSheet("color:#FFFFFF; font-size:12pt;")
+
+        # Gruppe (exklusiv)
+        self.choice_group = QButtonGroup(self)
+        self.choice_group.addButton(self.rb_color,   0)
+        self.choice_group.addButton(self.rb_objects, 1)
+        self.choice_group.addButton(self.rb_both,    2)
+
+        # Semantische Werte (optional, bequemer als IDs)
+        self.rb_color.setProperty("value", "color")
+        self.rb_objects.setProperty("value", "objects")
+        self.rb_both.setProperty("value", "both")
+        self.rb_both.setChecked(True)
+
+        choice_row.addWidget(self.rb_color)
+        choice_row.addWidget(self.rb_objects)
+        choice_row.addWidget(self.rb_both)
+
+        # Direkt unter den +-Button setzen
+        idx_toggle = self.left_layout.indexOf(self.toggle_btn)
+        self.left_layout.insertWidget(idx_toggle + 1, self.choice_panel)
+
+
         # Panel direkt UNTER dem Toggle-Button einfügen
         idx_toggle = self.left_layout.indexOf(self.toggle_btn)
         self.left_layout.insertWidget(idx_toggle + 1, self.slider_panel)
@@ -282,6 +316,8 @@ class GUI(QMainWindow):
     def on_find_best_matches(self):
         # 1) Pfade der aktuell gedroppten Bilder links drucken
         current = self.get_current_paths()
+        mode = self.get_selected_mode()
+        print("Mode:", mode)
         print("Files:", current if current else "Keine Dateien gedroppt.")
 
         # 2) Grid einmalig bauen und anzeigen
@@ -333,6 +369,10 @@ class GUI(QMainWindow):
             self.toggle_btn.setText("+")
             # wenn nur noch 1 Bild da -> Slider ausblenden
             self.slider_panel.setVisible(False)
+    
+    def get_selected_mode(self):
+        btn = self.choice_group.checkedButton()
+        return btn.property("value") if btn is not None else None
 
 
 if __name__ == "__main__":
