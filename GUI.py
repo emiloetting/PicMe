@@ -2,14 +2,15 @@
 import sys, os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QFrame, QToolButton, QPushButton, QSizePolicy, QGridLayout
+    QLabel, QFrame, QToolButton, QPushButton, QSizePolicy, QGridLayout, QSlider
 )
-from PyQt5.QtGui import QPixmap, QIcon, QImage, QFont
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
 
 
 # -------- Drop-Label: nimmt lokale Bilddateien an und merkt den Pfad --------
 class DragDropLabel(QLabel):
+    imagePathChanged = pyqtSignal(object)  # str oder None
     exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
 
     def __init__(self, text="", parent=None):
@@ -43,6 +44,7 @@ class DragDropLabel(QLabel):
                             self.current_path = path
                             self.setText("")  # Platzhalter ausblenden
                             self._rescale()
+                            self.imagePathChanged.emit(path)  # << melden
                             e.acceptProposedAction()
                             return
         e.ignore()
@@ -57,6 +59,7 @@ class DragDropLabel(QLabel):
         self.current_path = None
         self.setPixmap(QPixmap())
         self.setText(placeholder)
+        self.imagePathChanged.emit(None)
 
     def _rescale(self):
         if self._orig is None or self.width() <= 0 or self.height() <= 0:
@@ -150,12 +153,45 @@ class GUI(QMainWindow):
         box1_lay = QVBoxLayout(self.box1_frame); box1_lay.setContentsMargins(12,12,12,12)
         self.box1 = DragDropLabel("Drop image here"); box1_lay.addWidget(self.box1)
         self.left_layout.addWidget(self.box1_frame)
+        self.box1.imagePathChanged.connect(self._maybe_show_sliders)
 
         # Toggle (+/-) für zweite Box
         self.toggle_btn = QToolButton(); self.toggle_btn.setObjectName("ToggleBtn")
         self.toggle_btn.setText("+"); self.toggle_btn.setFixedSize(28,28)
         self.toggle_btn.clicked.connect(self.toggle_second_box)
         self.left_layout.addWidget(self.toggle_btn)
+
+        # --- Slider-Panel (initial unsichtbar) ---
+        self.slider_panel = QWidget()
+        self.slider_panel.setVisible(False)
+        sp_lay = QVBoxLayout(self.slider_panel)
+        sp_lay.setContentsMargins(0, 8, 0, 0)
+        sp_lay.setSpacing(8)
+
+        # Slider 1 (0..2, intern 0..200)
+        row1 = QHBoxLayout(); row1.setContentsMargins(0,0,0,0)
+        self.s1_label = QLabel("Weight A:")
+        self.s1_value = QLabel("1.00")
+        self.slider1 = QSlider(Qt.Horizontal); self.slider1.setRange(0, 200); self.slider1.setSingleStep(1)
+        self.slider1.valueChanged.connect(self._on_slider1_changed)
+        row1.addWidget(self.s1_label); row1.addWidget(self.slider1, 1); row1.addWidget(self.s1_value)
+
+        # Slider 2 (0..2, intern 0..200)
+        row2 = QHBoxLayout(); row2.setContentsMargins(0,0,0,0)
+        self.s2_label = QLabel("Weight B:")
+        self.s2_value = QLabel("1.00")
+        self.slider2 = QSlider(Qt.Horizontal); self.slider2.setRange(0, 200); self.slider2.setSingleStep(1)
+        self.slider2.valueChanged.connect(self._on_slider2_changed)
+        row2.addWidget(self.s2_label); row2.addWidget(self.slider2, 1); row2.addWidget(self.s2_value)
+
+        sp_lay.addLayout(row1)
+        sp_lay.addLayout(row2)
+        for lbl in (self.s1_label, self.s1_value, self.s2_label, self.s2_value):
+            lbl.setStyleSheet("color: #FFFFFF; font-size: 13pt;")
+
+        # Panel direkt UNTER dem Toggle-Button einfügen
+        idx_toggle = self.left_layout.indexOf(self.toggle_btn)
+        self.left_layout.insertWidget(idx_toggle + 1, self.slider_panel)
 
         # Zweite Box (start: None)
         self.second_box_frame = None
@@ -181,8 +217,43 @@ class GUI(QMainWindow):
         self.grid_widget.setVisible(False)
 
         self.grid_labels = []    # wird beim ersten Klick gebaut
-        # Liste der Match-Pfade (nur diese landen im Grid)
-        self.match_paths = []
+        self.match_paths = []    # Liste der Match-Pfade (nur diese landen im Grid)
+
+        # Slider Default (1.00 / 1.00)
+        self._reset_sliders()
+
+    # ---------- Slider-Logik ----------
+    def _reset_sliders(self):
+        # Beide auf 1.00 setzen ohne Ping-Pong
+        self.slider1.blockSignals(True); self.slider2.blockSignals(True)
+        self.slider1.setValue(100)
+        self.slider2.setValue(100)
+        self.slider1.blockSignals(False); self.slider2.blockSignals(False)
+        self.s1_value.setText("1.00")
+        self.s2_value.setText("1.00")
+
+    def _on_slider1_changed(self, v):
+        # v in [0..200] -> zweiter = 200 - v
+        comp = 200 - v
+        self.slider2.blockSignals(True)
+        self.slider2.setValue(comp)
+        self.slider2.blockSignals(False)
+        self.s1_value.setText(f"{v/100:.2f}")
+        self.s2_value.setText(f"{comp/100:.2f}")
+
+    def _on_slider2_changed(self, v):
+        comp = 200 - v
+        self.slider1.blockSignals(True)
+        self.slider1.setValue(comp)
+        self.slider1.blockSignals(False)
+        self.s2_value.setText(f"{v/100:.2f}")
+        self.s1_value.setText(f"{comp/100:.2f}")
+
+    def _maybe_show_sliders(self, *_):
+        # Sichtbar nur, wenn zwei Bilder geladen sind
+        have1 = getattr(self.box1, "current_path", None) is not None
+        have2 = (self.second_box is not None) and (getattr(self.second_box, "current_path", None) is not None)
+        self.slider_panel.setVisible(have1 and have2)
 
     # --- Build 4x3 grid once ---
     def _build_grid(self, rows=4, cols=3):
@@ -224,6 +295,9 @@ class GUI(QMainWindow):
         paths_for_grid = sorted(self.match_paths)
         self.set_grid_images(paths_for_grid)
 
+        weight_img_1, weight_img_2 = (self.slider1.value()/100, self.slider2.value()/100)
+
+
     # --- Aktuell gedroppte Pfade aus den linken Boxen ---
     def get_current_paths(self):
         out = []
@@ -246,6 +320,9 @@ class GUI(QMainWindow):
             idx = self.left_layout.indexOf(self.box1_frame)
             self.left_layout.insertWidget(idx + 1, self.second_box_frame)
 
+            # auf Drops reagieren -> Slider anzeigen wenn beide da
+            self.second_box.imagePathChanged.connect(self._maybe_show_sliders)
+
             self.toggle_btn.setText("−")
         else:
             # entfernen
@@ -254,6 +331,8 @@ class GUI(QMainWindow):
             self.second_box_frame = None
             self.second_box = None
             self.toggle_btn.setText("+")
+            # wenn nur noch 1 Bild da -> Slider ausblenden
+            self.slider_panel.setVisible(False)
 
 
 if __name__ == "__main__":
