@@ -14,9 +14,10 @@ def get_ssim(input_image: str, db_path: str):
 
     similar_images = get_similar_images(image_path=input_image, 
                                     max_distance=50,
-                                    max_results=20000,
+                                    max_results=2000,
                                     db_path=db_path)
 
+    print(similar_images)
 
     image1 = cv2.imread(input_image)
     image1 = cv2.resize(image1, (32, 32), interpolation=cv2.INTER_AREA)
@@ -50,14 +51,14 @@ def get_ssim(input_image: str, db_path: str):
             image2 = pickle.loads(pickle_bytes)
             
             # calc ssim
-            similarity = ssim(image1, image2, data_range=255, channel_axis=-1)
+            similarity = ssim(image1, image2, win_size=3)
             
-            if similarity != 1.1:
-                results.append({
-                    'similarity': similarity, 
-                    'image_id': image_id,
-                    'hash_distance': similar_image['distance']
-                })
+            
+            results.append({
+                'similarity': similarity, 
+                'image_id': image_id,
+                'hash_distance': similar_image['distance']
+            })
                 
         except Exception as e:
             print(f"Pickle-Fehler bei ID {image_id}: {e}")
@@ -71,8 +72,8 @@ def get_ssim(input_image: str, db_path: str):
 if __name__ == '__main__':
     time_start = time.time()
     cwd = os.getcwd()
-    input_image = os.path.join(r"C:\Users\joche\Documents\BigData\Repo\PicMe\SSIM\Testbilder\3d-model-world-earth-geography-2894348.jpg")
-    db = os.path.join(cwd, '500k.db')
+    input_image = os.path.join(r"C:\Users\joche\Documents\BigData\Repo\PicMe\SSIM\Testbilder\two-zebras-grazing-in-valencia-zoo-enclosure-29465858.jpeg")
+    db = os.path.join(cwd, '500k3.db')
 
     results = get_ssim(input_image = input_image, db_path = db)
     print(f'image_path: {input_image}')
