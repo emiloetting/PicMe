@@ -10,7 +10,7 @@ B_BINS = 15
 
 
 
-def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normalization: str|None) -> NDArray:
+def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normalization: str|None, adjusted_bin_size: bool=False) -> NDArray:
     """
     Function to extract color signature from an image and map it to quantized LAB colors.
 
@@ -20,6 +20,7 @@ def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normal
         a_bins (int): Amount of bins on a-channel
         b_bins (int): Amount of bins on b-channel
         normalization (str): Type of normalization to apply ('L1' or 'L2')
+        adjusted_bin_size (bool): Whether to adjust bin sizes for faster EMD calculation when normalization is 'L1'
 
     Returns:
         histogram_vector (NDArray): Normalized histogram vector of quantized colors in origian CIE-LAB 
@@ -29,18 +30,25 @@ def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normal
         raise ValueError(f"Normalization must be either 'L1' or 'L2', not '{normalization}'")
 
     img = cv2.imread(filepath)
-    rsz_img = downscale(img=img)
+    rsz_img = downscale_to_fix_size(img=img, max_pixels=1_000_000)
     lab_img = cv2.cvtColor(rsz_img, cv2.COLOR_BGR2Lab)
 
     # Median-Filter auf a und b
-    l, a, b = cv2.split(lab_img)
-    a = cv2.medianBlur(a, ksize=3)
-    b = cv2.medianBlur(b, ksize=3)
+    # l, a, b = cv2.split(lab_img)
+    # a = cv2.medianBlur(a, ksize=3)
+    # b = cv2.medianBlur(b, ksize=3)
 
     # In echten CIE-LAB Farbraum konvertieren
-    cie_lab = cv_to_cie(cv2.merge([l, a, b]))
+    # cie_lab = cv_to_cie(cv2.merge([l, a, b]))
 
-    # Flach machen
+    # For faster emd-calc: smaller bins for L1 normalization
+    if normalization == 'L1' and adjusted_bin_size:
+        l_bins = max(1, round(l_bins/1.3))  # Ensure at least 1 bin
+        a_bins = max(1, round(a_bins/1.3))
+        b_bins = max(1, round(b_bins/1.3))
+
+    cie_lab = cv_to_cie(lab_img)
+    # flatten
     pixels = cie_lab.reshape(-1, 3)
     l, a, b = pixels[:, 0], pixels[:, 1], pixels[:, 2]
 
@@ -119,8 +127,33 @@ def downscale(img:NDArray) -> NDArray:
     # Only catches if pxl count outside defined intervals
     return img
 
+def downscale_to_fix_size(img: NDArray, max_pixels: int = 250_000) -> NDArray:
+    """
+    Scales image to fixed size of max_pixels while keeping aspect ratio.
+    
+    Args:
+        img (NDArray): input image to be scaled
+        max_pixels (int): max amount of pixel for image to hold after scaling
 
-def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int, normalization: str, weights: list[float]=[1.0, 1.0]) -> NDArray:
+    Returns:
+        NDArray: possibly downscaled image
+    """
+    h, w = img.shape[:2]
+    curr_pixels = h * w
+
+    # Skip if img small enough
+    if curr_pixels <= max_pixels:
+        return img
+
+    # scaling factor
+    scale = (max_pixels / curr_pixels) ** 0.5
+
+    new_h = max(1, int(round(h * scale)))
+    new_w = max(1, int(round(w * scale)))
+
+    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int, normalization: str, adjusted_bin_size: bool, weights: list[float]=[1.0, 1.0]) -> NDArray:
     """Creates combined histogram of 2 input images.
     
     Args:
@@ -129,6 +162,7 @@ def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int,
         a_bins (int): Amount of bins on a-channel
         b_bins (int): Amount of bins on b-channel
         normalization (str): Type of normalization to apply ('L1' or 'L2')
+        adjusted_bin_size (bool): Whether to adjust the bin size based on the image content. Normalization must be 'L1'
         weights (list[float]): Weights for each image's histogram contribution. Sum must be 2 and each weight must be positive.
 
     Returns:
@@ -151,8 +185,8 @@ def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int,
 
     # Both weights are non-zero, proceed with full calculation
     # Calc individual hists
-    hist_1 = quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L1')*float(weights[0])
-    hist_2 = quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L1')*float(weights[1])
+    hist_1 = quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[0])
+    hist_2 = quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[1])
     combined_hist = np.sum([hist_1, hist_2], axis=0)
 
 
