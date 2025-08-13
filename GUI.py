@@ -236,7 +236,7 @@ class GUI(QMainWindow):
         self.rb_color.setProperty("value", "color")
         self.rb_objects.setProperty("value", "objects")
         self.rb_both.setProperty("value", "both")
-        self.rb_both.setChecked(True)
+        self.rb_color.setChecked(True)
 
         choice_row.addWidget(self.rb_color)
         choice_row.addWidget(self.rb_objects)
