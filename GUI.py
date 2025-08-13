@@ -6,9 +6,29 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from ColorSimilarity.main_helper import *
+
+
+# REMOVE LATER JUST FOR NO DB WORKING:
+cwd = os.getcwd()
+image_data_root = os.path.join(cwd, 'ImageData')
+database_image_paths = [os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))]
+full_hists_L1 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L1.npy')
+full_hists_L2 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L2.npy')
+cost_mat_path = os.path.join(cwd, "ColorSimilarity", 'CostMatrix_full.npy')
+# Load img-vector matrix
+M_V_L1 = np.load(full_hists_L1)
+M_V_L2 = np.load(full_hists_L2)
+l2_index = ann.AnnoyIndex(M_V_L2.shape[1], 'angular')
+l2_index.load(ann_idx_path)
+# Load cost-matrix for EMD
+cost_matrix = np.load(cost_mat_path)
+
 
 
 # -------- Drop-Label: nimmt lokale Bilddateien an und merkt den Pfad --------
+
+
 class DragDropLabel(QLabel):
     imagePathChanged = pyqtSignal(object)  # str oder None
     exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
@@ -18,17 +38,16 @@ class DragDropLabel(QLabel):
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.current_path = None         # <-- hier merken wir den Pfad
-        self._orig = None                # Original-Pixmap für sauberes Rescale
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)  # <<< wichtig
+        self.current_path = None
+        self._orig = None
 
     def dragEnterEvent(self, e):
         md = e.mimeData()
         if md.hasUrls():
             for u in md.urls():
                 if u.isLocalFile() and os.path.splitext(u.toLocalFile())[1].lower() in self.exts:
-                    e.acceptProposedAction()
-                    return
+                    e.acceptProposedAction(); return
         e.ignore()
 
     def dropEvent(self, e):
@@ -42,16 +61,15 @@ class DragDropLabel(QLabel):
                         if not pm.isNull():
                             self._orig = pm
                             self.current_path = path
-                            self.setText("")  # Platzhalter ausblenden
-                            self._rescale()
-                            self.imagePathChanged.emit(path)  # << melden
-                            e.acceptProposedAction()
-                            return
+                            self.setText("")
+                            self._rescale()               # <<< skaliert in den Innenbereich
+                            self.imagePathChanged.emit(path)
+                            e.acceptProposedAction(); return
         e.ignore()
 
     def resizeEvent(self, ev):
         if self._orig is not None:
-            self._rescale()
+            self._rescale()                            # <<< beim Relayout sauber nachziehen
         super().resizeEvent(ev)
 
     def clear_image(self, placeholder=""):
@@ -62,10 +80,14 @@ class DragDropLabel(QLabel):
         self.imagePathChanged.emit(None)
 
     def _rescale(self):
-        if self._orig is None or self.width() <= 0 or self.height() <= 0:
+        if self._orig is None:
             return
-        pm = self._orig.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        super().setPixmap(pm)
+        avail = self.contentsRect().size()            # <<< nicht self.size()
+        if avail.isEmpty():
+            return
+        pm = self._orig.scaled(avail, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        QLabel.setPixmap(self, pm)
+
 
 
 # -------- Thumbnail-Label fürs rechte Grid (skaliert mit) --------
@@ -74,7 +96,7 @@ class ThumbLabel(QLabel):
         super().__init__(parent)
         self._orig = None
         self.setAlignment(Qt.AlignCenter)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.setStyleSheet("background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px;")
 
     def setPixmap(self, pm: QPixmap):
@@ -87,9 +109,10 @@ class ThumbLabel(QLabel):
         super().resizeEvent(e)
 
     def _scaled(self):
-        if self._orig is None or self.width() <= 0 or self.height() <= 0:
+        size = self.contentsRect().size()
+        if self._orig is None or size.isEmpty():
             return QPixmap()
-        return self._orig.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        return self._orig.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
 
 # ------------------------------- GUI -------------------------------
@@ -152,6 +175,7 @@ class GUI(QMainWindow):
         self.box1_frame = QFrame(); self.box1_frame.setObjectName("DashedBox")
         box1_lay = QVBoxLayout(self.box1_frame); box1_lay.setContentsMargins(12,12,12,12)
         self.box1 = DragDropLabel("Drop image here"); box1_lay.addWidget(self.box1)
+        self.box1.setMinimumHeight(160)
         self.left_layout.addWidget(self.box1_frame)
         self.box1.imagePathChanged.connect(self._maybe_show_sliders)
 
@@ -312,6 +336,25 @@ class GUI(QMainWindow):
     def set_match_paths(self, paths):
         self.match_paths = list(paths or [])
 
+    def _ensure_left_previews(self):
+        def refresh(lbl: QLabel):
+            if not lbl:
+                return
+            # wenn Original vorhanden → neu skalieren
+            if getattr(lbl, "_orig", None) is not None:
+                lbl._rescale()
+                return
+            # falls nur Pfad da → Pixmap neu laden und skalieren
+            path = getattr(lbl, "current_path", None)
+            if path:
+                pm = QPixmap(path)
+                if not pm.isNull():
+                    lbl._orig = pm
+                    lbl.setText("")
+                    lbl._rescale()
+        refresh(getattr(self, "box1", None))
+        refresh(getattr(self, "second_box", None))
+
     # --- Button handler ---
     def on_find_best_matches(self):
         # 1) Pfade der aktuell gedroppten Bilder links drucken
@@ -328,10 +371,49 @@ class GUI(QMainWindow):
         self.grid_widget.setVisible(True)
 
         # 3) Nur DEINE Liste ins Grid laden (alphabetisch)
-        paths_for_grid = sorted(self.match_paths)
-        self.set_grid_images(paths_for_grid)
+        if self.rb_color.isChecked():
+            if len(current) == 2:
+                weight_img_1, weight_img_2 = (self.slider1.value()/100, self.slider2.value()/100)
+                sorted_paths = color_match_double_ann(
+                    img_paths=current,
+                    db_img_paths=[os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))],
+                    l1_emb=M_V_L1,
+                    annoy_index=l2_index,
+                    l_bins=L_BINS,
+                    a_bins=A_BINS,
+                    b_bins=B_BINS,
+                    emd_cost_mat=cost_matrix,
+                    img_weights=[weight_img_1, weight_img_2],
+                    num_results=12,
+                    emd_count=12,
+                    track_time=True,
+                    show=False,
+                    adjusted_bin_size=True
+                )
 
-        weight_img_1, weight_img_2 = (self.slider1.value()/100, self.slider2.value()/100)
+            else:
+                sorted_paths = color_match_single_ann(
+                img_path=current,
+                db_img_paths=database_image_paths,
+                l1_emb=M_V_L1,
+                annoy_index=l2_index,
+                l_bins=L_BINS,
+                a_bins=A_BINS,
+                b_bins=B_BINS,
+                emd_cost_mat=cost_matrix,
+                num_results=12,  # Use 12 as number of results
+                emd_count=12,  # Use 12 for EMD calculations
+                track_time=True,
+                show=False,
+                adjusted_bin_size=True
+            )
+            self.set_grid_images(sorted_paths)
+
+        self._ensure_left_previews()
+        if getattr(self, "box1", None) and getattr(self.box1, "_orig", None) is not None:
+            self.box1._rescale()
+        if getattr(self, "second_box", None) and getattr(self.second_box, "_orig", None) is not None:
+            self.second_box._rescale()
 
 
     # --- Aktuell gedroppte Pfade aus den linken Boxen ---
@@ -350,6 +432,7 @@ class GUI(QMainWindow):
             self.second_box_frame = QFrame(); self.second_box_frame.setObjectName("DashedBox")
             box2_lay = QVBoxLayout(self.second_box_frame); box2_lay.setContentsMargins(12,12,12,12)
             self.second_box = DragDropLabel("Add second image")
+            self.second_box.setMinimumHeight(160)
             box2_lay.addWidget(self.second_box)
 
             # unter Box1 einfügen
