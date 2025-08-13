@@ -24,7 +24,7 @@ with tqdm.tqdm(total=len(image_paths)) as bar:
     for file_path in image_paths:
 
         # Calc hists
-        hist_full_complete_L1 = quantized_image(file_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L1')
+        hist_full_complete_L1 = quantized_image(file_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L1', adjusted_bin_size=True)
         hist_full_complete_L2 = quantized_image(file_path, l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS, normalization='L2')
 
         full_hists_L1.append(hist_full_complete_L1)

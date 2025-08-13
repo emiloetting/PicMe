@@ -2,6 +2,7 @@ ImageData/*
 __pycache__/
 ColorSimilarity/test_images/*
 ColorSimilarity/*.npy
+ColorSimilarity/*.ann
 .venv/
 logos/*
 !logos/PicMe_logo_cleaned.png
