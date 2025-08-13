@@ -28,7 +28,8 @@ database_image_paths = [os.path.join(image_data_root, f) for f in os.listdir(ima
 # Load img-vector matrix
 M_V_L1 = np.load(full_hists_L1)
 M_V_L2 = np.load(full_hists_L2)
-
+l2_index = ann.AnnoyIndex(M_V_L2.shape[1], 'angular')
+l2_index.load(ann_idx_path)
 # Load cost-matrix for EMD
 cost_matrix = np.load(cost_mat_path)
 
@@ -37,33 +38,38 @@ single_double = 'double'
 # Iterate through each image and find the most similar images
 if single_double == 'single':
     for img_path in image_paths:
-        color_match_single(
+        color_match_single_ann(
             img_path=[img_path],
             db_img_paths=database_image_paths,
             l1_emb=M_V_L1,
-            l2_emb=M_V_L2,
+            ann_index=l2_index,
             l_bins=L_BINS,
             a_bins=A_BINS,
             b_bins=B_BINS,
             emd_cost_mat=cost_matrix,
-            batch_size=10,
+            num_results=12,  # Use 12 as number of results
+            emd_count=12,  # Use 12 for EMD calculations
             track_time=True,
-            show=True
+            show=True,
+            adjusted_bin_size=True
         )
 
 if single_double == 'double':
     for img_path in zip(image_paths, image_paths_reversed):
-        color_match_double(
+        color_match_double_ann(
             img_paths=img_path,
             db_img_paths=database_image_paths,
             l1_emb=M_V_L1,
-            l2_emb=M_V_L2,
+            annoy_index=l2_index,
             l_bins=L_BINS,
             a_bins=A_BINS,
             b_bins=B_BINS,
             emd_cost_mat=cost_matrix,
             img_weights=[.5, 1.5],
-            batch_size=7,
+            num_results=12,
+            emd_count=12,
             track_time=True,
-            show=True
+            show=True,
+            adjusted_bin_size=True
         )
+        

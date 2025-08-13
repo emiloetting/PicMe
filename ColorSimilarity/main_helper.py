@@ -5,7 +5,14 @@ import cv2 as cv
 from colorClusterquantized import *
 import time
 from pyemd import emd_with_flow
+import annoy as ann
+import os
 
+
+
+ann_idx_path = os.path.join(os.getcwd(), 'ColorSimilarity', 'color_index_l2.ann')
+ann_idx = ann.AnnoyIndex(L_BINS*A_BINS*B_BINS, 'angular')
+ann_idx.load(ann_idx_path)
 
 
 # HELPER-MODULE CONTAINING FUNCTIONS FOR MAIN.PY----------------------------------
@@ -37,7 +44,7 @@ def presort_sims(sims: NDArray, relative_tresh: float) -> list[NDArray]:
 
 
 def visualize(img_path: list[str], sim_imgs: list, cos_vals: NDArray, emd_dists: list[float]|None, final_metric: NDArray|None, sort_by: str, img_weights: list[float]|None=None):
-    """Opens matplotlib visualization of top-5 images based on cosine similarities and EMD histograms.
+    """Opens matplotlib visualization of top-12 images based on cosine similarities and EMD histograms.
 
     Args:
         img_path (str|list[str]): Path to the input image or list of image paths.
@@ -68,47 +75,80 @@ def visualize(img_path: list[str], sim_imgs: list, cos_vals: NDArray, emd_dists:
 
     sim_list.sort(key=lambda x: x[sort_mapping[sort_by]])  # Sort by specified metric
 
-    # Create figure
+    # Festlegen der Größe basierend auf Anzahl der Input-Bilder
     if len(img_path) == 1:
-
-        # For single input image
-        fig, axs = plt.subplots(1, 6, figsize=(18, 8))
-        axs[0].imshow(cv.imread(img_path[0])[..., ::-1])   # BGR to RGB by rearranging channels -> plt reads img as RGB
-        axs[0].axis('off')
-        axs[0].set_title('Input')
+        # Ein einzelnes Input-Bild
+        fig, axs = plt.subplots(2, 7, figsize=(24, 10))
+        
+        # Input-Bild anzeigen
+        axs[0, 0].imshow(cv.imread(img_path[0])[..., ::-1])
+        axs[0, 0].axis('off')
+        axs[0, 0].set_title('Input')
+        
+        # Leere Stelle für die Ausrichtung
+        axs[1, 0].axis('off')
+        
+        # Top-12 Bilder anzeigen (6 pro Zeile)
+        for i, tup in enumerate(sim_list[:12]):
+            row = i // 6
+            col = i % 6 + 1
+            
+            if (emd_dists is None) or (final_metric is None):
+                sim_path, cos_v = tup
+                title = f'#{i+1}\nCos: {cos_v:.3f}'
+            else:
+                sim_path, cos_v, emd_v, total_score = tup
+                title = f'#{i+1}\nCos: {cos_v:.3f}\nEMD: {emd_v:.3f}\nScore: {total_score:.3f}'
+            
+            axs[row, col].imshow(cv.imread(sim_path)[..., ::-1])
+            axs[row, col].set_title(title)
+            axs[row, col].axis('off')
     
     else:
-        # For 2 input images
-        fig, axs = plt.subplots(2, 6, figsize=(18, 12))
-
-        # Display first input image
-        axs[0, 0].imshow(cv.imread(img_path[0])[..., ::-1])   # BGR to RGB by rearranging channels -> plt reads img as RGB
+        # Zwei Input-Bilder
+        fig, axs = plt.subplots(3, 7, figsize=(24, 15))
+        
+        # Erstes Input-Bild anzeigen
+        axs[0, 0].imshow(cv.imread(img_path[0])[..., ::-1])
         axs[0, 0].axis('off')
         if img_weights is not None:
             axs[0, 0].set_title(f'Input 1\nWeight: {img_weights[0]}')
         else:
             axs[0, 0].set_title('Input 1')
-
-        # Display second input image
-        axs[1, 0].imshow(cv.imread(img_path[1])[..., ::-1])   # BGR to RGB by rearranging channels -> plt reads img as RGB
+        
+        # Zweites Input-Bild anzeigen
+        axs[1, 0].imshow(cv.imread(img_path[1])[..., ::-1])
         axs[1, 0].axis('off')
         if img_weights is not None:
             axs[1, 0].set_title(f'Input 2\nWeight: {img_weights[1]}')
         else:
             axs[1, 0].set_title('Input 2')
-
-    # Top 5 Kandidaten (nach EMD sortiert)
-    for col, tup in enumerate(sim_list[:5], start=1):
-        if (emd_dists is None) or (final_metric is None):
-            sim_path, cos_v = tup
-            title = f'#{col}\nCos: {cos_v:.3f}'
-        else:
-            sim_path, cos_v, emd_v, total_score = tup
-            title = f'#{col}\nCos: {cos_v:.3f}\nEMD: {emd_v:.3f}\nTotal Score: {total_score:.3f}'
-        axs[0, col].imshow(cv.imread(sim_path)[..., ::-1])
-        axs[0, col].set_title(title)
-        axs[0, col].axis('off')
+            
+        # Leere Stelle für die Ausrichtung
+        axs[2, 0].axis('off')
         
+        # Top-12 Bilder anzeigen (6 pro Zeile)
+        for i, tup in enumerate(sim_list[:12]):
+            row = i // 6
+            col = i % 6 + 1
+            
+            if (emd_dists is None) or (final_metric is None):
+                sim_path, cos_v = tup
+                title = f'#{i+1}\nCos: {cos_v:.3f}'
+            else:
+                sim_path, cos_v, emd_v, total_score = tup
+                title = f'#{i+1}\nCos: {cos_v:.3f}\nEMD: {emd_v:.3f}\nScore: {total_score:.3f}'
+            
+            axs[row, col].imshow(cv.imread(sim_path)[..., ::-1])
+            axs[row, col].set_title(title)
+            axs[row, col].axis('off')
+    
+    # Leere Achsen ausblenden
+    for row in range(axs.shape[0]):
+        for col in range(axs.shape[1]):
+            if not axs[row, col].has_data():
+                fig.delaxes(axs[row, col])
+    
     plt.tight_layout()
     plt.show()
 
@@ -219,6 +259,92 @@ def work_that_vectors(input_vec_l1: NDArray,
     # filled list of paths in descending order of similarity
     return sim_ordered_paths
 
+def work_that_vectors_ann(input_vec_l1: NDArray,
+                    input_vec_l2: NDArray,
+                    input_img_paths: list[str],
+                    db_img_paths: list[str], 
+                    l1_emb: NDArray, 
+                    annoy_index: ann.AnnoyIndex, 
+                    emd_cost_mat: NDArray|None, 
+                    img_weights: list[float]|None=None,
+                    num_results: int=12,  # Statt batch_size - Anzahl der Ergebnisse
+                    emd_count: int=12,    # Anzahl der EMD-Berechnungen
+                    track_time: bool=False,
+                    show: bool=False) -> list[str]:
+    """
+    Processes the input image vectors and finds similar images using Annoy index.
+
+    Args:
+        input_vec_l1 (NDArray): The L1 feature vector of the input image.
+        input_vec_l2 (NDArray): The L2 feature vector of the input image.
+        input_img_paths (list[str]): The file paths of the input images.
+        db_img_paths (list[str]): The file paths of the database images.
+        l1_emb (NDArray): The L1 embeddings of the database images.
+        annoy_index (ann.AnnoyIndex): The Annoy index for fast nearest neighbor search.
+        emd_cost_mat (NDArray|None): The cost matrix for EMD calculation.
+        img_weights (list[float]|None): Weights for each image's contribution to the final metric.
+        num_results (int): Number of similar images to return (default: 12).
+        emd_count (int): Number of images for which to calculate EMD (default: 12).
+        track_time (bool): Whether to track processing time.
+        show (bool): Whether to display results in matplotlib window.
+
+    Returns:
+        list[str]: Paths of images ordered by similarity.
+    """
+    
+    if track_time:
+        start = time.time()
+
+    # Get top N images according to annoy
+    indices, distances = annoy_index.get_nns_by_vector(input_vec_l2, num_results, include_distances=True)
+    cosine_values = 1 - np.array(distances)**2 / 2  # make cosine sim from angular distances
+
+    # Paths in initial order (by cosine similarity)
+    sim_ordered_paths = [db_img_paths[index] for index in indices]
+
+    if track_time:
+        print(f"Annoy search time: {time.time()-start:.3f}s")
+        start_emd = time.time()
+
+    # Berechne EMD für die angegebene Anzahl von Bildern
+    # Nutze min() um sicherzustellen, dass wir nicht mehr Bilder verarbeiten als wir haben
+    emd_calc_size = min(emd_count, len(indices))
+    top_indices = indices[:emd_calc_size]
+    top_cosine_values = cosine_values[:emd_calc_size]
+    
+    emd_values, final_metrics = calc_emd_and_final(
+        input_vec_l1, 
+        top_indices, 
+        top_cosine_values, 
+        l1_emb, 
+        emd_cost_mat
+    )
+    
+    # Sortiere die Bilder mit EMD-Berechnung nach final_metrics
+    top_paths = [db_img_paths[i] for i in top_indices]
+    sorted_indices = np.argsort(final_metrics)  # sort ascending by final metrics
+    sorted_top_paths = [top_paths[i] for i in sorted_indices]
+    
+    # Ersetze die entsprechenden Einträge in sim_ordered_paths mit den sortierten
+    sim_ordered_paths[:emd_calc_size] = sorted_top_paths
+    
+    if track_time and emd_calc_size > 0:
+        print(f"EMD time: {time.time()-start_emd:.3f}s\n")
+    
+    if show:
+        visualize(
+            input_img_paths, 
+            sim_ordered_paths[:12],  # 12 since we have 12 spaces in the visualization
+            cosine_values[:12],      # 12 since we have 12 spaces in the visualization
+            emd_values,
+            final_metrics,
+            sort_by='final', 
+            img_weights=img_weights
+        )
+
+    # Liste der Pfade in absteigender Ähnlichkeit
+    return sim_ordered_paths  # Return only the top 12 results for visualization
+
 
 def color_match_single(img_path: list[str], 
                         db_img_paths: list[str], 
@@ -268,6 +394,57 @@ def color_match_single(img_path: list[str],
                       track_time=track_time,
                       show=show)
     
+def color_match_single_ann(img_path: list[str], 
+                        db_img_paths: list[str], 
+                        l1_emb: NDArray, 
+                        annoy_index: ann.AnnoyIndex, 
+                        l_bins: int, a_bins: int, b_bins: int, 
+                        emd_cost_mat: NDArray|None, 
+                        num_results: int=12,
+                        emd_count: int=12,
+                        track_time: bool=False,
+                        show: bool=False,
+                        adjusted_bin_size: bool=False) -> list[str]:
+
+    """Finds the most similar image in the database for a single input image based on cosine similarity and EMD of LAB-space histograms.
+
+    Args:
+        img_path (list(str)): List containing the path to the input image. Must contain exactly one image path.
+        db_img_paths (list[str]): List of paths to the database images.
+        l_bins (int): Number of bins for the L channel.
+        a_bins (int): Number of bins for the A channel.
+        b_bins (int): Number of bins for the B channel.
+        track_time (bool): Whether to track and print the time taken for each step.
+
+    Returns:
+        list[str]: Paths to the most similar images in order of similarity.
+    """
+    assert isinstance(img_path, list) and len(img_path) == 1, f"img_path must be a list containing exactly one image path, got {img_path}"
+
+    # Keep track of time if desired
+    if track_time:
+        start = time.time()
+
+    input_vector_l2 = quantized_image(img_path[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L2')
+    input_vector_l1 = quantized_image(img_path[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L1', adjusted_bin_size=adjusted_bin_size).astype(np.float64)
+
+    if track_time:
+        print(f'Hists for input took: {time.time()-start:.3f}s')
+        start = time.time()
+
+    # Calc sims and return the result
+    return work_that_vectors_ann(input_vec_l1=input_vector_l1, 
+                      input_vec_l2=input_vector_l2, 
+                      input_img_paths=img_path,
+                      db_img_paths=db_img_paths,
+                      l1_emb=l1_emb, 
+                      annoy_index=annoy_index, 
+                      emd_cost_mat=emd_cost_mat,
+                      num_results=num_results,  # Use batch_size as number of results
+                      emd_count=emd_count,  # Use batch_size for EMD calculations
+                      track_time=track_time,
+                      show=show)
+    
 
 def color_match_double(img_paths: list[str], 
                         db_img_paths: list[str], 
@@ -276,7 +453,8 @@ def color_match_double(img_paths: list[str],
                         l_bins: int, a_bins: int, b_bins: int, 
                         emd_cost_mat: NDArray|None, 
                         img_weights: list[float]=[1.0, 1.0],
-                        batch_size: int=10,
+                        num_results: int=12,
+                        emd_count: int=12,
                         track_time: bool=False,
                         show: bool=False) -> NDArray:
 
@@ -322,16 +500,81 @@ def color_match_double(img_paths: list[str],
         start = time.time()
 
     # Calc sims
-    work_that_vectors(input_vec_l1=combined_vec_l1, 
+    return work_that_vectors_ann(input_vec_l1=combined_vec_l1, 
                       input_vec_l2=combined_vec_l2, 
                       input_img_paths=[img_path1, img_path2],
                       db_img_paths=db_img_paths,
                       l1_emb=l1_emb, 
                       l2_emb=l2_emb, 
                       emd_cost_mat=emd_cost_mat,
-                      img_weights=img_weights,
-                      batch_size=batch_size,
+                      num_results=num_results,  # Use batch_size as number of results
+                      emd_count=emd_count,  # Use batch_size for EMD calculations
                       track_time=track_time,
                       show=show)
-    
-    return
+
+def color_match_double_ann(img_paths: list[str], 
+                        db_img_paths: list[str], 
+                        l1_emb: NDArray, 
+                        annoy_index: ann.AnnoyIndex, 
+                        l_bins: int, a_bins: int, b_bins: int, 
+                        emd_cost_mat: NDArray|None, 
+                        img_weights: list[float]=[1.0, 1.0],
+                        num_results: int=12,
+                        emd_count: int=12,
+                        track_time: bool=False,
+                        show: bool=False,
+                        adjusted_bin_size: bool=False) -> NDArray:
+
+    """Finds the most similar image in the database for a pair of input images based on cosine similarity and EMD of LAB-space histograms.
+
+    Args:
+        img_paths (list[str]): List containing the paths to the input images. Must contain exactly two image paths.
+        db_img_paths (list[str]): List of paths to the database images.
+        l1_emb (NDArray): L1 embedding matrix.
+        annoy_index (AnnoyIndex): Annoy index for fast nearest neighbor search.
+        l_bins (int): Number of bins for the L channel.
+        a_bins (int): Number of bins for the A channel.
+        b_bins (int): Number of bins for the B channel.
+        emd_cost_mat (NDArray|None): Cost matrix for EMD calculation.
+        img_weights (list[float]): Weights for each image's histogram contribution. Sum must be 2.
+        batch_size (int, optional): Size of the batches for processing. Defaults to 10.
+        track_time (bool, optional): Whether to track processing time and display in terminal. Defaults to False.
+        show (bool, optional): Whether to show visualization in matplotlib. Defaults to False.
+
+    Returns:
+        NDArray: Array containing the similarity scores for each database image.
+    """
+    assert isinstance(img_paths, (list, tuple)) and len(img_paths) == 2, f"img_paths must be a list containing exactly two image paths, got {img_paths}"
+
+    # Extract paths
+    img_path1, img_path2 = img_paths
+
+    # Track time if desired
+    if track_time:
+        start = time.time()
+
+    # Calc L1 and L2 normalized vectors for both images
+    combined_vec_l1 = quantize2images(filepaths=[img_path1, img_path2],
+                                      l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
+                                      normalization='L1', adjusted_bin_size=adjusted_bin_size, weights=img_weights).astype(np.float64)
+
+    combined_vec_l2 = quantize2images(filepaths=[img_path1, img_path2],
+                                      l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
+                                      normalization='L2', adjusted_bin_size=adjusted_bin_size, weights=img_weights).astype(np.float64)
+
+    if track_time:
+        print(f'Hists for input took: {time.time()-start:.3f}s')
+        start = time.time()
+
+    # Calc sims
+    return work_that_vectors_ann(input_vec_l1=combined_vec_l1, 
+                      input_vec_l2=combined_vec_l2, 
+                      input_img_paths=[img_path1, img_path2],
+                      db_img_paths=db_img_paths,
+                      l1_emb=l1_emb, 
+                      annoy_index=annoy_index, 
+                      emd_cost_mat=emd_cost_mat,
+                      num_results=num_results,  # Use batch_size as number of results
+                      emd_count=emd_count,  # Use batch_size for EMD calculations
+                      track_time=track_time,
+                      show=show)
