@@ -25,6 +25,7 @@ def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normal
     Returns:
         histogram_vector (NDArray): Normalized histogram vector of quantized colors in origian CIE-LAB 
     """
+    assert not (normalization != 'L1' and adjusted_bin_size), f"Adjusted bin size can only be used with normalization 'L1', not '{normalization}'"
     # Check if the normalization parameter is valid
     if normalization not in ['L1', 'L2', None]:
         raise ValueError(f"Normalization must be either 'L1' or 'L2', not '{normalization}'")
@@ -174,14 +175,14 @@ def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int,
         raise ValueError(f"Invalid amount of image paths in argument 'filepaths'. Expected 2, got {len(filepaths)}")
 
     assert np.sum(weights) == 2, f"Weights must sum to 2. Current sum: {np.sum(weights)}"
-
+    assert not (normalization != 'L1' and adjusted_bin_size), f"Adjusted bin size can only be used with normalization 'L1', not '{normalization}'"
 
     # Check how weights are balanced and skip unnecessary computations
     if float(weights[0]) == 0.0:
-        return quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization)
+        return quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)
 
     elif float(weights[1]) == 0.0:   # second weight == 0: calculate only first
-        return quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization)
+        return quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)
 
     # Both weights are non-zero, proceed with full calculation
     # Calc individual hists

@@ -560,7 +560,7 @@ def color_match_double_ann(img_paths: list[str],
 
     combined_vec_l2 = quantize2images(filepaths=[img_path1, img_path2],
                                       l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
-                                      normalization='L2', adjusted_bin_size=adjusted_bin_size, weights=img_weights).astype(np.float64)
+                                      normalization='L2', adjusted_bin_size=False, weights=img_weights).astype(np.float64)
 
     if track_time:
         print(f'Hists for input took: {time.time()-start:.3f}s')
