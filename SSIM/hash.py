@@ -10,37 +10,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
 
 
-class PerceptualHash:
-    def __init__(self, image_path: str):
-        self.image_path = image_path
-        # self.db_path = db_path
 
-    def compute_hash(self):
-        """compute the hash of image"""
-
-        # convert the image to grayscale, resize
-        image = cv2.imread(self.image_path, cv2.IMREAD_GRAYSCALE)
-        img_small = cv2.resize(image, (32, 32), interpolation=cv2.INTER_AREA)
-        img_float = np.float32(img_small)
-
-        # perform dct
-        dct = cv2.dct(img_float)
-        dct = dct[0:8, 0:8]
-        dct = dct.flatten()
-
-        # compute hash
-        median = np.median(dct)
-        hash_array = (dct > median).astype(int)
-       
-        hash_str = ''.join(map(str, hash_array))
-        return hash_str
   
-    def hamming_distance( hash1, hash2):
-        """calculates the hamming distance of two hashes"""
-        int1 = int(hash1, 2)
-        int2 = int(hash2, 2)
-        xor_result = int1 ^ int2
-        return bin(xor_result).count('1')
+def hamming_distance( hash1, hash2):
+    """calculates the hamming distance of two hashes"""
+    int1 = int(hash1, 2)
+    int2 = int(hash2, 2)
+    xor_result = int1 ^ int2
+    return bin(xor_result).count('1')
     
 
 class WaveletHash:
@@ -49,14 +26,12 @@ class WaveletHash:
         self.image_path = image_path
 
 
-    def compute_wavelet_hash(self, image_path: str):
+    def compute_wavelet_hash(self,):
         """Berechnet echten optimierten Wavelet-Hash"""
         try:
-            image = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+            image = cv2.imread(str(self.image_path), cv2.IMREAD_GRAYSCALE)
             if image is None:
                 return None
-            
-
             
             # 32x32 images
             img_32 = cv2.resize(image, (32, 32), interpolation=cv2.INTER_AREA)
@@ -75,7 +50,7 @@ class WaveletHash:
             return ''.join(map(str, hash_array.flatten()))
             
         except Exception as e:
-            print(f"Fehler beim Hashen von {image_path}: {e}")
+            print(f"Fehler beim Hashen von {self.image_path}: {e}")
             return None
 
     def add_wavelet_column(self):
@@ -201,6 +176,7 @@ class WaveletHash:
             raise
         finally:
             conn.close()
+            
 class HashDatabase:
     """build a hash database and search for similar images"""
     
@@ -231,19 +207,6 @@ class HashDatabase:
         conn.commit()
         conn.close()
     
-    def add_image_hash(self, image_path: str, phash: str):
-        """add an image hash to the database"""
-
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO image_hashes (image_path, phash)
-            VALUES (?, ?)
-        ''', (image_path, phash))
-        
-        conn.commit()
-        conn.close()
     
     def get_all_hashes(self) -> Dict[str, str]:
         """get all image hashes from the database"""
@@ -278,7 +241,7 @@ class HashDatabase:
         results = []
         
         for id, stored_hash in all_hashes.items():
-            distance = PerceptualHash.hamming_distance(hash1 = query_hash, hash2 = stored_hash)
+            distance = hamming_distance(hash1 = query_hash, hash2 = stored_hash)
             
             if distance <= max_distance:
                 results.append({'id': id, 'distance': distance})
@@ -286,60 +249,14 @@ class HashDatabase:
         # sort by distance
         results.sort(key=lambda x: x['distance'])
         
-        return results[:max_results]
-    
-
-
-class ImageHashProcessor:
-    """process images and add their hashes to the database"""
-
-    def __init__(self, db_path: str):
-        self.db = HashDatabase(db_path)
-
-    def image_generator(self, directory_path: str, image_extensions: tuple = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')):
-        """generate all images in a directory"""
-
-        directory = Path(directory_path)
-
-        for ext in image_extensions:
-            yield from directory.rglob(f'*{ext}')
-            yield from directory.rglob(f'*{ext.upper()}')
-
-    def process_directory(self, directory_path: str):
-        """process all images in a directory and add their hashes to the database"""
-        
-        processed = 0
-        errors = 0
-
-        for image_path in tqdm(self.image_generator(directory_path)):
-
-            try:
-                phash = PerceptualHash(image_path).compute_hash()
-                if phash:
-                    self.db.add_image_hash(str(image_path), phash)
-                    processed += 1
-
-            except Exception as e:
-                print(f"Error processing {image_path}: {e}")
-                errors += 1
-
-        print(f"Processed {processed} images. {errors} errors.")
-        
-
-
-
-def process_images(directory_path: str, db_path: str):
-    """process all images in a directory and add their hashes to the database"""
-
-    processor = ImageHashProcessor(db_path)
-    processor.process_directory(directory_path)
+        return results[:max_results]    
     
 
 def get_similar_images(image_path: str, db_path: str, max_distance: int = 30, max_results: int = 1000):
     """get similar images to a given image"""
 
     db = HashDatabase(db_path)
-    query_hash = WaveletHash(db_path, image_path).compute_wavelet_hash(image_path=image_path)
+    query_hash = WaveletHash(db_path, image_path).compute_wavelet_hash()
     results = db.find_similar(query_hash, max_distance, max_results)
     return results
 
