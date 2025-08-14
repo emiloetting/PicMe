@@ -147,7 +147,6 @@ class WaveletHash:
         print(f"{total_images:,} images to process")
         
 
-        start_time = time.time()
         processed_count = 0
         error_count = 0
         updates_buffer = []
@@ -346,7 +345,7 @@ def get_similar_images(image_path: str, db_path: str, max_distance: int = 30, ma
 
 
 def get_wavelet_hashes_optimized(db_path: str, bulk_size: int = 10):
-    """Optimierte Wavelet-Migration nach PRIMARY KEY Fix"""
+    """get wavelet hashes for all images in the database"""
     migrator = WaveletHash(db_path)
     migrator.migrate_all_images_sequential_optimized(bulk_size)
 
