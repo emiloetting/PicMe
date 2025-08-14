@@ -9,7 +9,6 @@ if __name__ == "__main__":
 
     cwd = os.getcwd()
 
-
     # Define address of Google Drive folder to grab ANNOY-Index 
     color_index_file_id = None  # replace with actual ANN-index name
     ssim_index_file_id = None  # replace with actual SSIM index name
