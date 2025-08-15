@@ -6,3 +6,4 @@ ColorSimilarity/*.ann
 .venv/
 logos/*
 !logos/PicMe_logo_cleaned.png
+Profiling/profiles_html/*
