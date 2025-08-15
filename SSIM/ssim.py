@@ -240,35 +240,3 @@ def get_ssim_multiple(input_images: List[str], db_path: str):
     final_results = [result['image_path'] for result in final_results]
     print(final_results)
     return final_results
-
-if __name__ == '__main__':
-    time_start = time.time()
-    cwd = os.getcwd()
-    db = os.path.join(cwd, '500k3.db')
-
-
-    single_image = r"E:\data\image_data\500k\pixabay_dataset_v1\images_07\3d-model-world-earth-geography-2895712.jpg"
-    
-    results_single = get_ssim(single_image, db_path=db)
-    for i, result in enumerate(results_single):
-        print(f"  {i+1}. ID {result['image_id']}: {result['similarity']:.4f}, {result['image_path']}")
-    
-    
-    input_images = [
-        r"E:\data\image_data\500k\pixabay_dataset_v1\images_07\raindrops-ripples-water-rain-4332152.jpg",
-        r"E:\data\image_data\500k\pixabay_dataset_v1\images_07\rain-drops-rainy-wet-droplets-3915684.jpg"
-    ]
-    
-    
-    if len(input_images) > 1:
-        results_multi = get_ssim(input_images, db_path=db)
-
-        for i, result in enumerate(results_multi):
-            print(f"{i+1}. ID {result['image_id']}:")
-            print(f"Combined Score: {result['similarity']:.4f}")
-            print(f"Individual SSIM: {[f'{s:.4f}' for s in result['individual_similarities']]}")
-            print(f"Image Path: {result['image_path']}")
-            print()
-    
-    time_end = time.time()
-    print(f"Total execution time: {time_end - time_start:.2f} seconds")

@@ -7,3 +7,5 @@ ColorSimilarity/*.ann
 logos/*
 !logos/PicMe_logo_cleaned.png
 *.db
+ObjectSimilarity/*.ann
+ObjectSimilarity/*.json
