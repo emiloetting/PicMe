@@ -42,7 +42,7 @@ def create_ann(folder_path):
     index.build(20)
     index.save("500k.ann")
     
-    with open("image_paths.json", "w") as f:
+    with open("test_pictures_paths.json", "w") as f:
         json.dump(path_mapping, f)
     
     return path_mapping
