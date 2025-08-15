@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-from scipy import signal
 from SSIM.hash import get_similar_images
 from skimage.metrics import structural_similarity as ssim
 import time
@@ -20,7 +19,7 @@ def get_ssim(input_images: Union[str, List[str]], db_path: str):
         db_path: Path to database
     
     Returns:
-        List of dictionaries with similarity scores and metadata
+        List of sorted file paths (first file path is the most similar to input image(s))
     """
     # input images to list
     if isinstance(input_images, str):
@@ -36,8 +35,19 @@ def get_ssim(input_images: Union[str, List[str]], db_path: str):
         return get_ssim_multiple(input_images, db_path)
 
 
-def get_ssim_single(input_image: str, db_path: str):
-    """get best 5 similar images for one input image"""
+def get_ssim_single(input_image: str, db_path: str, n_results: int = 12):
+    """
+    get best n_results similar images for one input image
+
+    Args:
+        input_image: path to input image
+        db_path: path to database
+        n_results: number of similar images to return
+
+    Returns:
+        list of sorted file paths (first file path is the most similar to input image(s))
+    """
+
     similar_images = get_similar_images(image_path=input_image, 
                                     max_distance=50,
                                     max_results=2000,
@@ -45,12 +55,14 @@ def get_ssim_single(input_image: str, db_path: str):
 
     print(f"Found {len(similar_images)} similar images for hash matching")
 
+    # load input image
     image1 = cv2.imread(input_image)
     image1 = cv2.resize(image1, (32, 32), interpolation=cv2.INTER_AREA)
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
+    # load similar images from database
     ids = [img['id'] for img in similar_images]
     id_placeholders = ','.join(['?'] * len(ids))
     
@@ -66,6 +78,7 @@ def get_ssim_single(input_image: str, db_path: str):
     id_to_pickle = {row[0]: row[1] for row in pickle_data}
     id_to_path = {row[0]: row[2] for row in pickle_data}  
     
+    # calculate SSIM for each similar image
     for similar_image in similar_images:
         image_id = similar_image['id']
         pickle_bytes = id_to_pickle.get(image_id)
@@ -86,10 +99,10 @@ def get_ssim_single(input_image: str, db_path: str):
             print(f"cannot load image {image_id}: {e}")
             continue
 
+    # sort by similarity and return n_results
     results.sort(key = lambda x: x['similarity'], reverse=True)
-    final_results = results[:12]
+    final_results = results[:n_results]
     final_results = [result['image_path'] for result in final_results]
-    print(final_results)
     return final_results
 
 
@@ -98,7 +111,16 @@ def get_ssim_multiple(input_images: List[str], db_path: str):
     differnces to get_ssim_single:
     - get hash candidates from all input images
     - less candidates per input image for performance
-    - calc SSIM between candidates and input images
+    - calc SSIM between all candidates and all input images
+    - get best matching images getting avg ssim score and addincoverage bonus, if candidate image matches to all input images via hash
+
+    Args:
+        input_image: path to input image
+        db_path: path to database
+        n_results: number of similar images to return
+
+    Returns:
+        list of sorted file paths (first file path is the most similar to input image(s))
     """
     
     # get hash candidates from all input images
