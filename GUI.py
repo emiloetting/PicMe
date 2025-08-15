@@ -8,6 +8,7 @@ from PyQt5.QtGui import QPixmap, QIcon, QMovie
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
 from ColorSimilarity.main_helper import *
 from SSIM.ssim import get_ssim
+from ObjectSimilarity.similar_image import get_best_images
 
 
 # REMOVE LATER JUST FOR NO DB WORKING:
@@ -155,6 +156,12 @@ class FinderWorker(QThread):
                 cwd = os.getcwd()
                 db_path = os.path.join(cwd, "SSIM", "500k3.db")
                 sorted_paths = (get_ssim(current, db_path))
+
+            elif mode == "objects":
+                cwd = os.getcwd()
+                ann_file = os.path.join(cwd, "ObjectSimilarity", "500k.ann")
+                json_file = os.path.join(cwd, "ObjectSimilarity", "image_paths.json")
+                sorted_paths = (get_best_images(current, json_file, ann_file, num_results=12))
 
             else:
                 sorted_paths = []
