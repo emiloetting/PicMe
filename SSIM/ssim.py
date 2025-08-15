@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from scipy import signal
-from hash import get_similar_images
+from SSIM.hash import get_similar_images
 from skimage.metrics import structural_similarity as ssim
 import time
 import os
