@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QIcon, QMovie
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
 from ColorSimilarity.main_helper import *
+from SSIM.ssim import get_ssim
 
 
 # REMOVE LATER JUST FOR NO DB WORKING:
@@ -149,8 +150,15 @@ class FinderWorker(QThread):
                         num_results=12, emd_count=12,
                         track_time=True, show=False, adjusted_bin_size=True
                     )
+            
+            elif mode == "ssim":
+                cwd = os.getcwd()
+                db_path = os.path.join(cwd, "SSIM", "500k3.db")
+                sorted_paths = (get_ssim(current, db_path))
+
             else:
                 sorted_paths = []
+                
 
             self.finished.emit(sorted_paths)
         except Exception as e:
@@ -259,25 +267,25 @@ class GUI(QMainWindow):
 
         self.rb_color   = QRadioButton("Color")
         self.rb_objects = QRadioButton("Objects")
-        self.rb_both    = QRadioButton("Both")
+        self.rb_ssim    = QRadioButton("SSIM")
 
         # Styling
-        for rb in (self.rb_color, self.rb_objects, self.rb_both):
+        for rb in (self.rb_color, self.rb_objects, self.rb_ssim):
             rb.setStyleSheet("color:#FFFFFF; font-size:12pt;")
 
         self.choice_group = QButtonGroup(self)
         self.choice_group.addButton(self.rb_color,   0)
         self.choice_group.addButton(self.rb_objects, 1)
-        self.choice_group.addButton(self.rb_both,    2)
+        self.choice_group.addButton(self.rb_ssim,    2)
 
         self.rb_color.setProperty("value", "color")
         self.rb_objects.setProperty("value", "objects")
-        self.rb_both.setProperty("value", "both")
+        self.rb_ssim.setProperty("value", "ssim")
         self.rb_color.setChecked(True)
 
         choice_row.addWidget(self.rb_color)
         choice_row.addWidget(self.rb_objects)
-        choice_row.addWidget(self.rb_both)
+        choice_row.addWidget(self.rb_ssim)
 
         idx_toggle = self.left_layout.indexOf(self.toggle_btn)
         self.left_layout.insertWidget(idx_toggle + 1, self.choice_panel)

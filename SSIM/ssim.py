@@ -30,6 +30,7 @@ def get_ssim(input_images: Union[str, List[str]], db_path: str):
     if len(input_images) == 1:
         return get_ssim_single(input_images[0], db_path)
     
+    
     # if more than one image: use multiple image function
     else:
         return get_ssim_multiple(input_images, db_path)
