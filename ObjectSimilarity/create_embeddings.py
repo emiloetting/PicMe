@@ -12,7 +12,16 @@ model, preprocess = clip.load("ViT-B/32", device=device)
 
 
 def image_embeddings_with_paths(folder_path):
-    """creates a generator that yields tuples of (image_path, embedding)"""
+    """
+    creates clip embeddings for all images in folder
+
+    Args:
+        folder_path (str): path to folder containing images
+
+    Yields:
+        tuple: (image_path, embedding)
+    """
+
     folder = Path(folder_path)
     image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif"]
     
@@ -28,7 +37,16 @@ def image_embeddings_with_paths(folder_path):
 
 
 def create_ann(folder_path):
-    """creates an AnnoyIndex and mapping and saves it"""
+    """
+    creates annoy index and json file mapping index to image path
+    
+    Args:
+        folder_path (str): path to folder containing images
+
+    Returns:
+        dict: mapping of index to image path
+    """
+    
     index = AnnoyIndex(512, 'angular')
     path_mapping = {}
     
@@ -48,7 +66,7 @@ def create_ann(folder_path):
     return path_mapping
 
 
-if __name__ == "__main__":
-    mapping = create_ann(r"E:\data\image_data\500k")
-    print(f" {len(mapping)} images")
+# if __name__ == "__main__":
+#     mapping = create_ann(folder_path)
+#     print(f" {len(mapping)} images")
 
