@@ -159,7 +159,24 @@ def calc_emd_and_final(input_vec_l1: NDArray,
                         l1_emb: NDArray, 
                         emd_cost_mat: NDArray|None) -> list[list]:   
         
-    """ Calculates the EMD and final metric for the given indices and similar images."""
+    """ Calculates the EMD and final metric for the given indices and similar images.
+
+    Args:
+        input_vec_l1 (NDArray): The L1 feature vector of the input image.
+        idx (NDArray): The indices of the similar images.
+        cosine_values (NDArray): The cosine similarity values of the similar images.
+        l1_emb (NDArray): The L1 embeddings of the database images.
+        emd_cost_mat (NDArray|None): The cost matrix for EMD calculation.
+
+    Returns:
+        list[list]: A list containing the EMD values and final metrics.
+    """
+    assert input_vec_l1.ndim == 1, f"Expected (n,), got {input_vec_l1.shape}"
+    assert idx.ndim == 1, f"Expected (n,), got {idx.shape}"
+    assert cosine_values.ndim == 1, f"Expected (n,), got {cosine_values.shape}"
+    assert l1_emb.ndim == 2, f"Expected (n, m), got {l1_emb.shape}"
+    assert emd_cost_mat is None or emd_cost_mat.ndim == 2, f"Expected (n, n), got {emd_cost_mat.shape if emd_cost_mat is not None else None}"
+
     emd_values = []
     final_metrics = []
 
@@ -258,6 +275,7 @@ def work_that_vectors(input_vec_l1: NDArray,
 
     # filled list of paths in descending order of similarity
     return sim_ordered_paths
+
 
 def work_that_vectors_ann(input_vec_l1: NDArray,
                     input_vec_l2: NDArray,
@@ -361,15 +379,26 @@ def color_match_single(img_path: list[str],
     Args:
         img_path (list(str)): List containing the path to the input image. Must contain exactly one image path.
         db_img_paths (list[str]): List of paths to the database images.
+        l1_emb (NDArray): L1 embedding matrix.
+        l2_emb (NDArray): L2 embedding matrix.
         l_bins (int): Number of bins for the L channel.
         a_bins (int): Number of bins for the A channel.
         b_bins (int): Number of bins for the B channel.
+        emd_cost_mat (NDArray|None): Cost matrix for EMD calculation.
+        batch_size (int): Batch size for processing.
         track_time (bool): Whether to track and print the time taken for each step.
 
     Returns:
         NDArray: Array containing the similarity scores for each database image.
     """
     assert isinstance(img_path, list) and len(img_path) == 1, f"img_path must be a list containing exactly one image path, got {img_path}"
+    assert isinstance(db_img_paths, list) and len(db_img_paths) > 0, f"db_img_paths must be a non-empty list, got {db_img_paths}"
+    assert isinstance(l1_emb, np.ndarray) and l1_emb.ndim == 2, f"l1_emb must be a 2D numpy array, got {l1_emb.shape if l1_emb is not None else None}"
+    assert isinstance(l2_emb, np.ndarray) and l2_emb.ndim == 2, f"l2_emb must be a 2D numpy array, got {l2_emb.shape if l2_emb is not None else None}"
+    assert isinstance(emd_cost_mat, np.ndarray) and emd_cost_mat.ndim == 2, f"emd_cost_mat must be a 2D numpy array, got {emd_cost_mat.shape if emd_cost_mat is not None else None}"
+    assert isinstance(batch_size, int) and batch_size > 0, f"batch_size must be a positive integer, got {batch_size}"
+    assert isinstance(track_time, bool), f"track_time must be a boolean, got {type(track_time)}"
+    assert isinstance(show, bool), f"show must be a boolean, got {type(show)}"
 
     # Keep track of time if desired
     if track_time:
