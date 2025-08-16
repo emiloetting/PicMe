@@ -9,19 +9,15 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
 from ColorSimilarity.main_helper import *
 from SSIM.ssim import get_ssim
 from ObjectSimilarity.similar_image import get_best_images
+from DataBase.backend_setup import L_BINS, A_BINS, B_BINS
 
 
 # REMOVE LATER JUST FOR NO DB WORKING:
 cwd = os.getcwd()
-image_data_root = os.path.join(cwd, 'ImageData')
-database_image_paths = [os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))]
-full_hists_L1 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L1.npy')
-full_hists_L2 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L2.npy')
-cost_mat_path = os.path.join(cwd, "ColorSimilarity", 'CostMatrix_full.npy')
-M_V_L1 = np.load(full_hists_L1)
-M_V_L2 = np.load(full_hists_L2)
-l2_index = ann.AnnoyIndex(M_V_L2.shape[1], 'angular')
-l2_index.load(ann_idx_path)
+cost_mat_path = os.path.join(cwd, "DataBase", "emd_cost_full.npy")
+ann_index_path = os.path.join(cwd, "DataBase","color_ann_index.ann")
+l2_index = ann.AnnoyIndex(L_BINS*A_BINS*B_BINS, 'angular')
+l2_index.load(ann_index_path)
 cost_matrix = np.load(cost_mat_path)
 
 
@@ -130,9 +126,6 @@ class FinderWorker(QThread):
                     weight_img_2 = self.s2_val / 100.0
                     sorted_paths = color_match_double_ann(
                         img_paths=current,
-                        db_img_paths=[os.path.join(image_data_root, f) for f in os.listdir(image_data_root)
-                                      if os.path.isfile(os.path.join(image_data_root, f))],
-                        l1_emb=M_V_L1,
                         annoy_index=l2_index,
                         l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS,
                         emd_cost_mat=cost_matrix,
@@ -143,8 +136,6 @@ class FinderWorker(QThread):
                 else:
                     sorted_paths = color_match_single_ann(
                         img_path=current,
-                        db_img_paths=database_image_paths,
-                        l1_emb=M_V_L1,
                         annoy_index=l2_index,
                         l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS,
                         emd_cost_mat=cost_matrix,
