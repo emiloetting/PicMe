@@ -150,8 +150,8 @@ class FinderWorker(QThread):
 
             elif mode == "objects":
                 cwd = os.getcwd()
-                ann_file = os.path.join(cwd, "ObjectSimilarity", "500k.ann")
-                json_file = os.path.join(cwd, "ObjectSimilarity", "image_paths.json")
+                ann_file = os.path.join(cwd, "ObjectSimilarity", "clip_embeddings.ann")
+                json_file = os.path.join(cwd, "ObjectSimilarity", "clip_embeddings_paths.json")
                 sorted_paths = (get_best_images(current, json_file, ann_file, num_results=12))
 
             else:

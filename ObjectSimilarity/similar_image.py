@@ -5,8 +5,6 @@ import clip
 import torch
 from typing import List, Union
 import numpy as np
-import time
-
 
 
 def get_image_embedding(image_path: str):
@@ -32,8 +30,7 @@ def get_image_embedding(image_path: str):
         print(f"Error processing {image_path}: {e}")
 
 
-def get_best_images(input_images: Union[str, List[str]], index_to_path_json: str, annfile: str, num_results: int = 12):
-
+def get_best_images(input_images: Union[str, List[str]], index_to_path_json: str, annfile: str, num_results: int = 5):
     """
     gets the best matching images from annoy index
     based on cosine similarity of clip embeddings
