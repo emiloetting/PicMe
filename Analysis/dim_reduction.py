@@ -1,34 +1,54 @@
-from sklearn.manifold import TSNE
-from sklearn.decomposition import KernelPCA, PCA
+from sklearn.decomposition import PCA
 import os
 import numpy as np
-import json
-
-# Load color embeddings
-cwd = os.getcwd()
-l2_color_path = os.path.join(cwd, "ColorSimilarity", "FullHists_L2.npy")
-color_embeddings_l2 = np.load(l2_color_path)
-
-# COLOR VISUALIZATION
-#   2D:
-#       PCA:
-pca_2d = PCA(n_components=2)
-color_embeddings_l2_pca_2d = pca_2d.fit_transform(color_embeddings_l2)
-
-k_pca_2d = KernelPCA(n_components=2, kernel='rbf', eigen_solver='randomized')
-color_embeddings_l2_k_pca_2d = k_pca_2d.fit_transform(color_embeddings_l2)
-
-tsne_2d = TSNE(n_components=2, perplexity=30, max_iter=1000)
-color_embeddings_l2_tsne_2d = tsne_2d.fit_transform(color_embeddings_l2)
+from annoy import AnnoyIndex
+import numpy as np
+from umap import UMAP
+import pickle
+from tqdm import tqdm
 
 
-# Store
-dim_reduced_l2_color_embeds = {
-    "pca_2d": color_embeddings_l2_pca_2d.tolist(),
-    "k_pca_2d": color_embeddings_l2_k_pca_2d.tolist(),
-    "tsne_2d": color_embeddings_l2_tsne_2d.tolist(),
-}
+if __name__ == "__main__":
+    cwd = os.getcwd()
 
-json_path = os.path.join(cwd, "Analysis", "dim_reduced_l2_color_embeds.json")
-with open(json_path, "w") as f:
-    json.dump(dim_reduced_l2_color_embeds, f)
+
+    # Grab CLIP embeddings
+    clip_embed_dims = 512
+    ann_idx = AnnoyIndex(clip_embed_dims, 'angular')
+    ann_idx.load(os.path.join("DataBase", "clip_embeddings.ann"))
+    amnt_files = ann_idx.get_n_items()
+    clip_vectors = np.zeros((amnt_files, clip_embed_dims), dtype=np.float32)
+    with tqdm(total=amnt_files, desc="Extracting + normalizing CLIP embeddings") as pbar:
+        for i in range(amnt_files):
+            vec = np.array(ann_idx.get_item_vector(i), dtype=np.float32)
+            clip_vectors[i] = vec / np.linalg.norm(vec)
+            pbar.update(1)
+
+    # Save embeddings
+    np.save(os.path.join(cwd, "Analysis", "clip_embeds.npy"), clip_vectors)
+
+    # First step: Rough reduction using PCA
+    pca = PCA(n_components=30)
+    clip_pca = pca.fit_transform(clip_vectors)
+
+    # Second step: more granular using UMAP
+    print('Performing UMAP...')
+    reducer = UMAP(
+        n_neighbors=30,
+        min_dist=0.0,
+        n_components=2,
+        random_state=42,
+        verbose=True,
+        metric='cosine'
+    )
+    clip_umap = reducer.fit_transform(clip_pca)
+
+    # Save final reduced embeddings
+    final_path = os.path.join(cwd, "Analysis", "dim_reduced_clip_embeds.npy")
+    np.save(final_path, clip_umap)
+
+    # Safe PCA and UMAP model for applying later to centroids
+    with open(os.path.join(cwd, "Analysis", "pca_model.pkl"), "wb") as f:
+        pickle.dump(pca, f)
+    with open(os.path.join(cwd, "Analysis", "umap_model.pkl"), "wb") as f:
+        pickle.dump(reducer, f)
