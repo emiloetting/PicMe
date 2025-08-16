@@ -2,8 +2,6 @@ import cv2
 import numpy as np
 from SSIM.hash import get_similar_images
 from skimage.metrics import structural_similarity as ssim
-import time
-import os
 import sqlite3
 import pickle
 from typing import List, Union
