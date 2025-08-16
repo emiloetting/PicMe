@@ -145,13 +145,13 @@ class FinderWorker(QThread):
             
             elif mode == "ssim":
                 cwd = os.getcwd()
-                db_path = os.path.join(cwd, "SSIM", "hash_database.db")
+                db_path = os.path.join(cwd, "Database", "hash_database.db")
                 sorted_paths = (get_ssim(current, db_path))
 
             elif mode == "objects":
                 cwd = os.getcwd()
-                ann_file = os.path.join(cwd, "ObjectSimilarity", "clip_embeddings.ann")
-                json_file = os.path.join(cwd, "ObjectSimilarity", "clip_embeddings_paths.json")
+                ann_file = os.path.join(cwd, "Database", "clip_embeddings.ann")
+                json_file = os.path.join(cwd, "DataBase", "clip_embeddings_paths.json")
                 sorted_paths = (get_best_images(current, json_file, ann_file, num_results=12))
 
             else:

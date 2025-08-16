@@ -16,6 +16,9 @@ if __name__ == "__main__":
         'color_ann_index.ann': os.path.join(cwd, "DataBase", "color_ann_index.ann"),
         'color_database.db': os.path.join(cwd, "DataBase", "color_database.db"),
         'emd_cost_full.npy': os.path.join(cwd, "DataBase", "emd_cost_full.npy"),
+        'clip_embeddings_paths.josn': os.path.join(cwd, "DataBase", "clip_embeddings_paths.json"),
+        'clip_embeddings.ann': os.path.join(cwd, "DataBase", "clip_embeddings.ann"),
+        'hash_database.db': os.path.join(cwd, "DataBase", "hash_database.db")
     }
 
     # Define folder ID
