@@ -5,4 +5,5 @@ ColorSimilarity/*.npy
 ColorSimilarity/*.ann
 .venv/
 Profiling/
-DataBase/
+DataBase/*
+!DataBase/*.py
