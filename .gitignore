@@ -2,3 +2,4 @@ ColorSimilarity/
 ImageData/
 ObjectSimilarity/
 Profiling/
+*/__pycache__/
