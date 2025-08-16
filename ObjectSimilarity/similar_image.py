@@ -49,7 +49,6 @@ def get_best_images(input_images: Union[str, List[str]], index_to_path_json: str
     
     # if single image: use single image function
     if len(input_images) == 1:
-
         index = AnnoyIndex(512, 'angular')
         index.load(annfile)
 
