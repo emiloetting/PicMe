@@ -56,7 +56,6 @@ def get_ssim_single(input_image: str, db_path: str, n_results: int = 12):
                                     db_path=db_path)
 
     print(f"Found {len(similar_images)} similar images for hash matching")
-
     # load input image
     image1 = cv2.imread(input_image)
     image1 = cv2.resize(image1, (32, 32), interpolation=cv2.INTER_AREA)
@@ -241,4 +240,5 @@ def get_ssim_multiple(input_images: List[str], db_path: str):
     final_results = results[:12]
     final_results = [result['image_path'] for result in final_results]
     print(final_results)
+
     return final_results
