@@ -2,7 +2,7 @@ import numpy as np
 import os
 from ColorSimilarity.colorClusterquantized import *
 from ColorSimilarity.main_helper import *
-from DataBase.backend_setup import L_BINS, A_BINS, B_BINS
+from DataBase.color_backend_setup import L_BINS, A_BINS, B_BINS
 
 
 

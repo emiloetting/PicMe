@@ -11,7 +11,7 @@ import sqlite3
 
 # Try to import from DataBase package, fall back to hardcoded values
 try:
-    from DataBase.backend_setup import L_BINS, A_BINS, B_BINS
+    from DataBase.color_backend_setup import L_BINS, A_BINS, B_BINS
 except ModuleNotFoundError:
     from backend_setup import L_BINS, A_BINS, B_BINS
 
