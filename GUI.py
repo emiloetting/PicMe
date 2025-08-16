@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
 from ColorSimilarity.main_helper import *
 from SSIM.ssim import get_ssim
 from ObjectSimilarity.similar_image import get_best_images
-from DataBase.backend_setup import L_BINS, A_BINS, B_BINS
+from DataBase.color_backend_setup import L_BINS, A_BINS, B_BINS
 
 
 # REMOVE LATER JUST FOR NO DB WORKING:
