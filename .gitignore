@@ -1,11 +1,7 @@
 ImageData/*
 __pycache__/
-ColorSimilarity/test_images/*
-<<<<<<< HEAD
-ColorSimilarity/*.npy
+
 *.db
 *.ann
 *.json
-=======
-ColorSimilarity/*.npy
->>>>>>> e769f75587f5b8e43d25c4cf5b84196725b21217
+
