@@ -7,3 +7,6 @@ ColorSimilarity/*.ann
 logos/*
 !logos/PicMe_logo_cleaned.png
 DataBase/*
+Analysis/*.npy
+Analysis/*.pkl
+*.db
