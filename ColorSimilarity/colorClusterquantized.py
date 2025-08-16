@@ -4,13 +4,7 @@ from numpy.typing import NDArray
 
 
 
-L_BINS = 5
-A_BINS = 15
-B_BINS = 15
-
-
-
-def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normalization: str|None, adjusted_bin_size: bool=False) -> NDArray:
+def quantized_image(img: NDArray, l_bins: int, a_bins: int, b_bins: int, normalization: str|None, adjusted_bin_size: bool=False) -> NDArray:
     """
     Function to extract color signature from an image and map it to quantized LAB colors.
 
@@ -30,7 +24,6 @@ def quantized_image(filepath: str, l_bins: int, a_bins: int, b_bins: int, normal
     if normalization not in ['L1', 'L2', None]:
         raise ValueError(f"Normalization must be either 'L1' or 'L2', not '{normalization}'")
 
-    img = cv2.imread(filepath)
     rsz_img = downscale_to_fix_size(img=img, max_pixels=1_000_000)
     lab_img = cv2.cvtColor(rsz_img, cv2.COLOR_BGR2Lab)
 
@@ -154,7 +147,7 @@ def downscale_to_fix_size(img: NDArray, max_pixels: int = 250_000) -> NDArray:
 
     return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int, normalization: str, adjusted_bin_size: bool, weights: list[float]=[1.0, 1.0]) -> NDArray:
+def quantize2images(images: list[str], l_bins: int, a_bins: int, b_bins: int, normalization: str, adjusted_bin_size: bool, weights: list[float]=[1.0, 1.0]) -> NDArray:
     """Creates combined histogram of 2 input images.
     
     Args:
@@ -169,25 +162,25 @@ def quantize2images(filepaths: list[str], l_bins: int, a_bins: int, b_bins: int,
     Returns:
         histogram_vector (NDArray): Normalized combined histogram vector of quantized colors in origian CIE-LAB 
     """
-    if len(filepaths) == 1:
+    if len(images) == 1:
         raise ValueError(f"Invalid amount of image paths in argument 'filepaths'. Expected 2, got 1. Did you mean 'quantized_image()'?")
-    elif len(filepaths) != 2:
-        raise ValueError(f"Invalid amount of image paths in argument 'filepaths'. Expected 2, got {len(filepaths)}")
+    elif len(images) != 2:
+        raise ValueError(f"Invalid amount of image paths in argument 'filepaths'. Expected 2, got {len(images)}")
 
     assert np.sum(weights) == 2, f"Weights must sum to 2. Current sum: {np.sum(weights)}"
     assert not (normalization != 'L1' and adjusted_bin_size), f"Adjusted bin size can only be used with normalization 'L1', not '{normalization}'"
 
     # Check how weights are balanced and skip unnecessary computations
     if float(weights[0]) == 0.0:
-        return quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)
+        return quantized_image(images[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)
 
     elif float(weights[1]) == 0.0:   # second weight == 0: calculate only first
-        return quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)
+        return quantized_image(images[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)
 
     # Both weights are non-zero, proceed with full calculation
     # Calc individual hists
-    hist_1 = quantized_image(filepaths[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[0])
-    hist_2 = quantized_image(filepaths[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[1])
+    hist_1 = quantized_image(images[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[0])
+    hist_2 = quantized_image(images[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[1])
     combined_hist = np.sum([hist_1, hist_2], axis=0)
 
 
