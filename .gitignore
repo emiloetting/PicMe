@@ -1,5 +1,8 @@
-ColorSimilarity/
-ImageData/
-ObjectSimilarity/
+ImageData/*
+__pycache__/
+ColorSimilarity/test_images/*
+ColorSimilarity/*.npy
+ColorSimilarity/*.ann
+.venv/
 Profiling/
-*/__pycache__/
+*.db
