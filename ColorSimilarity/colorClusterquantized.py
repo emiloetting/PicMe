@@ -193,7 +193,6 @@ def quantize2images(images: list[str], l_bins: int, a_bins: int, b_bins: int, no
 
     assert np.sum(weights) == 2, f"Weights must sum to 2. Current sum: {np.sum(weights)}"
     assert not (normalization != 'L1' and adjusted_bin_size), f"Adjusted bin size can only be used with normalization 'L1', not '{normalization}'"
-    assert not (normalization != 'L1' and adjusted_bin_size), f"Adjusted bin size can only be used with normalization 'L1', not '{normalization}'"
 
     # Check how weights are balanced and skip unnecessary computations
     if float(weights[0]) == 0.0:
