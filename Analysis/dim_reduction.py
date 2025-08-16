@@ -22,24 +22,11 @@ tsne_2d = TSNE(n_components=2, perplexity=30, max_iter=1000)
 color_embeddings_l2_tsne_2d = tsne_2d.fit_transform(color_embeddings_l2)
 
 
-#   3D:
-pca_3d = PCA(n_components=3)
-color_embeddings_l2_pca_3d = pca_3d.fit_transform(color_embeddings_l2)
-
-k_pca_3d = KernelPCA(n_components=3, kernel='rbf', eigen_solver='randomized')
-color_embeddings_l2_k_pca_3d = k_pca_3d.fit_transform(color_embeddings_l2)
-
-tsne_3d = TSNE(n_components=3, perplexity=30, max_iter=1000)
-color_embeddings_l2_tsne_3d = tsne_3d.fit_transform(color_embeddings_l2)
-
 # Store
 dim_reduced_l2_color_embeds = {
     "pca_2d": color_embeddings_l2_pca_2d.tolist(),
     "k_pca_2d": color_embeddings_l2_k_pca_2d.tolist(),
     "tsne_2d": color_embeddings_l2_tsne_2d.tolist(),
-    "pca_3d": color_embeddings_l2_pca_3d.tolist(),
-    "k_pca_3d": color_embeddings_l2_k_pca_3d.tolist(),
-    "tsne_3d": color_embeddings_l2_tsne_3d.tolist()
 }
 
 json_path = os.path.join(cwd, "Analysis", "dim_reduced_l2_color_embeds.json")
