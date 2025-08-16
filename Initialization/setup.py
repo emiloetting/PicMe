@@ -16,10 +16,6 @@ if __name__ == "__main__":
         'color_ann_index.ann': os.path.join(cwd, "DataBase", "color_ann_index.ann"),
         'color_database.db': os.path.join(cwd, "DataBase", "color_database.db"),
         'emd_cost_full.npy': os.path.join(cwd, "DataBase", "emd_cost_full.npy"),
-        'FullHists_L1.npy': os.path.join(cwd, "DataBase", "color_db_components", "FullHists_L1.npy"),
-        'FullHists_L2.npy': os.path.join(cwd, "DataBase", "color_db_components", "FullHists_L2.npy"),
-        "image_paths.npy": os.path.join(cwd, "DataBase", "color_db_components", "image_paths.npy"),
-        "image_sizes.npy": os.path.join(cwd, "DataBase", "color_db_components", "image_sizes.npy")
     }
 
     # Define folder ID
