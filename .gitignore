@@ -9,4 +9,10 @@ logos/*
 DataBase/*
 Analysis/*.npy
 Analysis/*.pkl
+*.jpg
+!test_img_1.jpg
+!test_img_2.jpg
+Profiling/profiles_html/*
 *.db
+ObjectSimilarity/*.ann
+ObjectSimilarity/*.json

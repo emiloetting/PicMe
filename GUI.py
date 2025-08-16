@@ -4,33 +4,26 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QFrame, QToolButton, QPushButton, QSizePolicy, QGridLayout, QSlider, QRadioButton, QButtonGroup
 )
-from PyQt5.QtGui import QPixmap, QIcon
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtGui import QPixmap, QIcon, QMovie
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
 from ColorSimilarity.main_helper import *
+from SSIM.ssim import get_ssim
+from ObjectSimilarity.similar_image import get_best_images
+from DataBase.color_backend_setup import L_BINS, A_BINS, B_BINS
 
 
 # REMOVE LATER JUST FOR NO DB WORKING:
 cwd = os.getcwd()
-image_data_root = os.path.join(cwd, 'ImageData')
-database_image_paths = [os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))]
-full_hists_L1 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L1.npy')
-full_hists_L2 = os.path.join(cwd, 'ColorSimilarity', 'FullHists_L2.npy')
-cost_mat_path = os.path.join(cwd, "ColorSimilarity", 'CostMatrix_full.npy')
-# Load img-vector matrix
-M_V_L1 = np.load(full_hists_L1)
-M_V_L2 = np.load(full_hists_L2)
-l2_index = ann.AnnoyIndex(M_V_L2.shape[1], 'angular')
-l2_index.load(ann_idx_path)
-# Load cost-matrix for EMD
+cost_mat_path = os.path.join(cwd, "DataBase", "emd_cost_full.npy")
+ann_index_path = os.path.join(cwd, "DataBase","color_ann_index.ann")
+l2_index = ann.AnnoyIndex(L_BINS*A_BINS*B_BINS, 'angular')
+l2_index.load(ann_index_path)
 cost_matrix = np.load(cost_mat_path)
 
 
 
-# -------- Drop-Label: nimmt lokale Bilddateien an und merkt den Pfad --------
-
-
 class DragDropLabel(QLabel):
-    imagePathChanged = pyqtSignal(object)  # str oder None
+    imagePathChanged = pyqtSignal(object)
     exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
 
     def __init__(self, text="", parent=None):
@@ -38,7 +31,7 @@ class DragDropLabel(QLabel):
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)
-        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)  # <<< wichtig
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) 
         self.current_path = None
         self._orig = None
 
@@ -62,14 +55,14 @@ class DragDropLabel(QLabel):
                             self._orig = pm
                             self.current_path = path
                             self.setText("")
-                            self._rescale()               # <<< skaliert in den Innenbereich
+                            self._rescale()               
                             self.imagePathChanged.emit(path)
                             e.acceptProposedAction(); return
         e.ignore()
 
     def resizeEvent(self, ev):
         if self._orig is not None:
-            self._rescale()                            # <<< beim Relayout sauber nachziehen
+            self._rescale()                          
         super().resizeEvent(ev)
 
     def clear_image(self, placeholder=""):
@@ -82,15 +75,12 @@ class DragDropLabel(QLabel):
     def _rescale(self):
         if self._orig is None:
             return
-        avail = self.contentsRect().size()            # <<< nicht self.size()
+        avail = self.contentsRect().size()          
         if avail.isEmpty():
             return
         pm = self._orig.scaled(avail, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         QLabel.setPixmap(self, pm)
 
-
-
-# -------- Thumbnail-Label fürs rechte Grid (skaliert mit) --------
 class ThumbLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -114,6 +104,63 @@ class ThumbLabel(QLabel):
             return QPixmap()
         return self._orig.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
+class FinderWorker(QThread):
+    finished = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, current_paths, mode, s1_val, s2_val, parent=None):
+        super().__init__(parent)
+        self.current_paths = current_paths
+        self.mode = mode
+        self.s1_val = s1_val
+        self.s2_val = s2_val
+
+    def run(self):
+        try:
+            current = self.current_paths
+            mode = self.mode
+
+            if mode == "color":
+                if len(current) == 2:
+                    weight_img_1 = self.s1_val / 100.0
+                    weight_img_2 = self.s2_val / 100.0
+                    sorted_paths = color_match_double_ann(
+                        img_paths=current,
+                        annoy_index=l2_index,
+                        l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS,
+                        emd_cost_mat=cost_matrix,
+                        img_weights=[weight_img_1, weight_img_2],
+                        num_results=12, emd_count=12,
+                        track_time=True, show=False, adjusted_bin_size=True
+                    )
+                else:
+                    sorted_paths = color_match_single_ann(
+                        img_path=current,
+                        annoy_index=l2_index,
+                        l_bins=L_BINS, a_bins=A_BINS, b_bins=B_BINS,
+                        emd_cost_mat=cost_matrix,
+                        num_results=12, emd_count=12,
+                        track_time=True, show=False, adjusted_bin_size=True
+                    )
+            
+            elif mode == "ssim":
+                cwd = os.getcwd()
+                db_path = os.path.join(cwd, "Database", "hash_database.db")
+                sorted_paths = (get_ssim(current, db_path))
+
+            elif mode == "objects":
+                cwd = os.getcwd()
+                ann_file = os.path.join(cwd, "Database", "clip_embeddings.ann")
+                json_file = os.path.join(cwd, "DataBase", "clip_embeddings_paths.json")
+                sorted_paths = (get_best_images(current, json_file, ann_file, num_results=12))
+
+            else:
+                sorted_paths = []
+                
+
+            self.finished.emit(sorted_paths)
+        except Exception as e:
+            self.failed.emit(str(e))
 
 # ------------------------------- GUI -------------------------------
 class GUI(QMainWindow):
@@ -163,7 +210,7 @@ class GUI(QMainWindow):
         main.addWidget(left_col, 3)
         main.addWidget(right_col, 7)
 
-        # Logo (optional)
+        # Logo
         logo_wrap = QWidget(); logo_h = QHBoxLayout(logo_wrap); logo_h.setContentsMargins(0,0,0,0)
         logo = QLabel()
         pm = QPixmap(os.path.join("logos", "PicMe_logo_cleaned.png"))
@@ -179,20 +226,19 @@ class GUI(QMainWindow):
         self.left_layout.addWidget(self.box1_frame)
         self.box1.imagePathChanged.connect(self._maybe_show_sliders)
 
-        # Toggle (+/-) für zweite Box
+        # Toggle (+/-)
         self.toggle_btn = QToolButton(); self.toggle_btn.setObjectName("ToggleBtn")
         self.toggle_btn.setText("+"); self.toggle_btn.setFixedSize(28,28)
         self.toggle_btn.clicked.connect(self.toggle_second_box)
         self.left_layout.addWidget(self.toggle_btn)
 
-        # --- Slider-Panel (initial unsichtbar) ---
+        # --- Slider-Panel ---
         self.slider_panel = QWidget()
         self.slider_panel.setVisible(False)
         sp_lay = QVBoxLayout(self.slider_panel)
         sp_lay.setContentsMargins(0, 8, 0, 0)
         sp_lay.setSpacing(8)
 
-        # Slider 1 (0..2, intern 0..200)
         row1 = QHBoxLayout(); row1.setContentsMargins(0,0,0,0)
         self.s1_label = QLabel("Weight A:")
         self.s1_value = QLabel("1.00")
@@ -200,7 +246,6 @@ class GUI(QMainWindow):
         self.slider1.valueChanged.connect(self._on_slider1_changed)
         row1.addWidget(self.s1_label); row1.addWidget(self.slider1, 1); row1.addWidget(self.s1_value)
 
-        # Slider 2 (0..2, intern 0..200)
         row2 = QHBoxLayout(); row2.setContentsMargins(0,0,0,0)
         self.s2_label = QLabel("Weight B:")
         self.s2_value = QLabel("1.00")
@@ -211,47 +256,42 @@ class GUI(QMainWindow):
         sp_lay.addLayout(row1)
         sp_lay.addLayout(row2)
         for lbl in (self.s1_label, self.s1_value, self.s2_label, self.s2_value):
-            lbl.setStyleSheet("color: #FFFFFF; font-size: 13pt;")
+            lbl.setStyleSheet("color: #FFFFFF; font-size: 11pt;")
 
-        # --- Multiple-Choice (immer sichtbar) ---
+        # --- Multiple-Choice---
         self.choice_panel = QWidget()
         choice_row = QHBoxLayout(self.choice_panel)
         choice_row.setContentsMargins(0, 4, 0, 0)
 
         self.rb_color   = QRadioButton("Color")
         self.rb_objects = QRadioButton("Objects")
-        self.rb_both    = QRadioButton("Both")
+        self.rb_ssim    = QRadioButton("SSIM")
 
         # Styling
-        for rb in (self.rb_color, self.rb_objects, self.rb_both):
+        for rb in (self.rb_color, self.rb_objects, self.rb_ssim):
             rb.setStyleSheet("color:#FFFFFF; font-size:12pt;")
 
-        # Gruppe (exklusiv)
         self.choice_group = QButtonGroup(self)
         self.choice_group.addButton(self.rb_color,   0)
         self.choice_group.addButton(self.rb_objects, 1)
-        self.choice_group.addButton(self.rb_both,    2)
+        self.choice_group.addButton(self.rb_ssim,    2)
 
-        # Semantische Werte (optional, bequemer als IDs)
         self.rb_color.setProperty("value", "color")
         self.rb_objects.setProperty("value", "objects")
-        self.rb_both.setProperty("value", "both")
-        self.rb_both.setChecked(True)
+        self.rb_ssim.setProperty("value", "ssim")
+        self.rb_color.setChecked(True)
 
         choice_row.addWidget(self.rb_color)
         choice_row.addWidget(self.rb_objects)
-        choice_row.addWidget(self.rb_both)
+        choice_row.addWidget(self.rb_ssim)
 
-        # Direkt unter den +-Button setzen
         idx_toggle = self.left_layout.indexOf(self.toggle_btn)
         self.left_layout.insertWidget(idx_toggle + 1, self.choice_panel)
 
 
-        # Panel direkt UNTER dem Toggle-Button einfügen
         idx_toggle = self.left_layout.indexOf(self.toggle_btn)
         self.left_layout.insertWidget(idx_toggle + 1, self.slider_panel)
 
-        # Zweite Box (start: None)
         self.second_box_frame = None
         self.second_box = None
 
@@ -269,20 +309,40 @@ class GUI(QMainWindow):
         self.right_placeholder.setStyleSheet("color:#E6EDF3; font-size:18px;")
         right_layout.addWidget(self.right_placeholder)
 
+        # ----- Loader (GIF + "loading")-----
+        self.right_loader = QWidget()
+        _rl = QVBoxLayout(self.right_loader)
+        _rl.setContentsMargins(0, 20, 0, 0)
+        _rl.setSpacing(6)
+
+        self.loader_gif = QLabel(); self.loader_gif.setAlignment(Qt.AlignCenter)
+        gif_path = "loading.gif"  
+        self.loader_movie = QMovie(gif_path)
+        self.loader_gif.setMovie(self.loader_movie)
+
+        self.loader_txt = QLabel("loading")
+        self.loader_txt.setAlignment(Qt.AlignCenter)
+        self.loader_txt.setStyleSheet("color:#E6EDF3; font-size:14pt;")
+
+        _rl.addWidget(self.loader_gif, alignment=Qt.AlignHCenter)
+        _rl.addWidget(self.loader_txt, alignment=Qt.AlignHCenter)
+
+        self.right_loader.setVisible(False)
+        right_layout.addWidget(self.right_loader, alignment=Qt.AlignCenter)
+        # ---------------------------------------------------------------
+
         self.grid_widget = QWidget(); self.grid_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.right_grid = QGridLayout(self.grid_widget); self.right_grid.setContentsMargins(0,0,0,0); self.right_grid.setSpacing(10)
         right_layout.addWidget(self.grid_widget, 1)
         self.grid_widget.setVisible(False)
 
-        self.grid_labels = []    # wird beim ersten Klick gebaut
-        self.match_paths = []    # Liste der Match-Pfade (nur diese landen im Grid)
+        self.grid_labels = []    
+        self.match_paths = []    
 
-        # Slider Default (1.00 / 1.00)
         self._reset_sliders()
 
-    # ---------- Slider-Logik ----------
+    # ---------- Slider----------
     def _reset_sliders(self):
-        # Beide auf 1.00 setzen ohne Ping-Pong
         self.slider1.blockSignals(True); self.slider2.blockSignals(True)
         self.slider1.setValue(100)
         self.slider2.setValue(100)
@@ -291,7 +351,6 @@ class GUI(QMainWindow):
         self.s2_value.setText("1.00")
 
     def _on_slider1_changed(self, v):
-        # v in [0..200] -> zweiter = 200 - v
         comp = 200 - v
         self.slider2.blockSignals(True)
         self.slider2.setValue(comp)
@@ -308,7 +367,6 @@ class GUI(QMainWindow):
         self.s1_value.setText(f"{comp/100:.2f}")
 
     def _maybe_show_sliders(self, *_):
-        # Sichtbar nur, wenn zwei Bilder geladen sind
         have1 = getattr(self.box1, "current_path", None) is not None
         have2 = (self.second_box is not None) and (getattr(self.second_box, "current_path", None) is not None)
         self.slider_panel.setVisible(have1 and have2)
@@ -332,7 +390,6 @@ class GUI(QMainWindow):
             else:
                 lbl.setPixmap(QPixmap())
 
-    # --- Extern deine Ergebnisliste setzen (optional nutzbar) ---
     def set_match_paths(self, paths):
         self.match_paths = list(paths or [])
 
@@ -340,11 +397,11 @@ class GUI(QMainWindow):
         def refresh(lbl: QLabel):
             if not lbl:
                 return
-            # wenn Original vorhanden → neu skalieren
+        
             if getattr(lbl, "_orig", None) is not None:
                 lbl._rescale()
                 return
-            # falls nur Pfad da → Pixmap neu laden und skalieren
+           
             path = getattr(lbl, "current_path", None)
             if path:
                 pm = QPixmap(path)
@@ -357,66 +414,32 @@ class GUI(QMainWindow):
 
     # --- Button handler ---
     def on_find_best_matches(self):
-        # 1) Pfade der aktuell gedroppten Bilder links drucken
+        # 1) Status lesen
         current = self.get_current_paths()
         mode = self.get_selected_mode()
         print("Mode:", mode)
         print("Files:", current if current else "Keine Dateien gedroppt.")
 
-        # 2) Grid einmalig bauen und anzeigen
         if not self.grid_labels:
             self._build_grid(rows=4, cols=3)
         if self.right_placeholder.isVisible():
             self.right_placeholder.setVisible(False)
-        self.grid_widget.setVisible(True)
 
-        # 3) Nur DEINE Liste ins Grid laden (alphabetisch)
-        if self.rb_color.isChecked():
-            if len(current) == 2:
-                weight_img_1, weight_img_2 = (self.slider1.value()/100, self.slider2.value()/100)
-                sorted_paths = color_match_double_ann(
-                    img_paths=current,
-                    db_img_paths=[os.path.join(image_data_root, f) for f in os.listdir(image_data_root) if os.path.isfile(os.path.join(image_data_root, f))],
-                    l1_emb=M_V_L1,
-                    annoy_index=l2_index,
-                    l_bins=L_BINS,
-                    a_bins=A_BINS,
-                    b_bins=B_BINS,
-                    emd_cost_mat=cost_matrix,
-                    img_weights=[weight_img_1, weight_img_2],
-                    num_results=12,
-                    emd_count=12,
-                    track_time=True,
-                    show=False,
-                    adjusted_bin_size=True
-                )
+        self.grid_widget.setVisible(False)  
+        self.right_loader.setVisible(True)
+        self.loader_movie.start()
 
-            else:
-                sorted_paths = color_match_single_ann(
-                img_path=current,
-                db_img_paths=database_image_paths,
-                l1_emb=M_V_L1,
-                annoy_index=l2_index,
-                l_bins=L_BINS,
-                a_bins=A_BINS,
-                b_bins=B_BINS,
-                emd_cost_mat=cost_matrix,
-                num_results=12,  # Use 12 as number of results
-                emd_count=12,  # Use 12 for EMD calculations
-                track_time=True,
-                show=False,
-                adjusted_bin_size=True
-            )
-            self.set_grid_images(sorted_paths)
-
-        self._ensure_left_previews()
-        if getattr(self, "box1", None) and getattr(self.box1, "_orig", None) is not None:
-            self.box1._rescale()
-        if getattr(self, "second_box", None) and getattr(self.second_box, "_orig", None) is not None:
-            self.second_box._rescale()
+        self._worker = FinderWorker(
+            current_paths=current,
+            mode=mode,
+            s1_val=self.slider1.value(),
+            s2_val=self.slider2.value()
+        )
+        self._worker.finished.connect(self._on_find_done)
+        self._worker.failed.connect(self._on_find_failed)
+        self._worker.start()
 
 
-    # --- Aktuell gedroppte Pfade aus den linken Boxen ---
     def get_current_paths(self):
         out = []
         if getattr(self.box1, "current_path", None):
@@ -425,37 +448,54 @@ class GUI(QMainWindow):
             out.append(self.second_box.current_path)
         return out
 
-    # --- Plus/Minus für zweite Box ---
     def toggle_second_box(self):
         if self.second_box is None:
-            # Frame + Label bauen
             self.second_box_frame = QFrame(); self.second_box_frame.setObjectName("DashedBox")
             box2_lay = QVBoxLayout(self.second_box_frame); box2_lay.setContentsMargins(12,12,12,12)
             self.second_box = DragDropLabel("Add second image")
             self.second_box.setMinimumHeight(160)
             box2_lay.addWidget(self.second_box)
 
-            # unter Box1 einfügen
             idx = self.left_layout.indexOf(self.box1_frame)
             self.left_layout.insertWidget(idx + 1, self.second_box_frame)
 
-            # auf Drops reagieren -> Slider anzeigen wenn beide da
             self.second_box.imagePathChanged.connect(self._maybe_show_sliders)
 
             self.toggle_btn.setText("−")
         else:
-            # entfernen
+          
             self.left_layout.removeWidget(self.second_box_frame)
             self.second_box_frame.deleteLater()
             self.second_box_frame = None
             self.second_box = None
             self.toggle_btn.setText("+")
-            # wenn nur noch 1 Bild da -> Slider ausblenden
             self.slider_panel.setVisible(False)
     
     def get_selected_mode(self):
         btn = self.choice_group.checkedButton()
         return btn.property("value") if btn is not None else None
+    
+    def _on_find_done(self, sorted_paths):
+        try:
+            self.set_grid_images(sorted_paths)
+            self._ensure_left_previews()
+            if getattr(self, "box1", None) and getattr(self.box1, "_orig", None) is not None:
+                self.box1._rescale()
+            if getattr(self, "second_box", None) and getattr(self.second_box, "_orig", None) is not None:
+                self.second_box._rescale()
+        finally:
+        
+            self.loader_movie.stop()
+            self.right_loader.setVisible(False)
+            self.grid_widget.setVisible(True)
+            self._worker = None
+
+    def _on_find_failed(self, msg):
+        print("Fehler beim Finden:", msg)
+        self.loader_movie.stop()
+        self.right_loader.setVisible(False)
+        self.grid_widget.setVisible(False)
+        self._worker = None
 
 
 if __name__ == "__main__":
