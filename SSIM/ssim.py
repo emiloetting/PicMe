@@ -12,7 +12,6 @@ from typing import List, Union
 def get_ssim(input_images: Union[str, List[str]], db_path: str):
     """
     Get 5 most similar images for one or multiple input images
-    Optimized version using union of candidates for better coverage
     
     Args:
         input_images: Single image path (str) or list of image paths
@@ -38,6 +37,8 @@ def get_ssim(input_images: Union[str, List[str]], db_path: str):
 def get_ssim_single(input_image: str, db_path: str, n_results: int = 12):
     """
     get best n_results similar images for one input image
+    similar images are found via hash matching
+    best results of similar images are found via ssim
 
     Args:
         input_image: path to input image
@@ -45,9 +46,10 @@ def get_ssim_single(input_image: str, db_path: str, n_results: int = 12):
         n_results: number of similar images to return
 
     Returns:
-        list of sorted file paths (first file path is the most similar to input image(s))
+        list of sorted file paths (first file path is the most similar to input image)
     """
 
+    # get max_results similar images, based on hash
     similar_images = get_similar_images(image_path=input_image, 
                                     max_distance=50,
                                     max_results=2000,
@@ -67,7 +69,7 @@ def get_ssim_single(input_image: str, db_path: str, n_results: int = 12):
     id_placeholders = ','.join(['?'] * len(ids))
     
     cursor.execute(f'''
-        SELECT id, image_32x32, image_path FROM whole_db 
+        SELECT id, image_32x32, image_path FROM image_hashes
         WHERE id IN ({id_placeholders})
     ''', ids)
     
@@ -120,7 +122,7 @@ def get_ssim_multiple(input_images: List[str], db_path: str):
         n_results: number of similar images to return
 
     Returns:
-        list of sorted file paths (first file path is the most similar to input image(s))
+        list of sorted file paths (first file path is the most similar to input images)
     """
     
     # get hash candidates from all input images
@@ -183,7 +185,7 @@ def get_ssim_multiple(input_images: List[str], db_path: str):
     id_placeholders = ','.join(['?'] * len(candidate_ids))
     
     cursor.execute(f'''
-        SELECT id, image_32x32, image_path FROM whole_db 
+        SELECT id, image_32x32, image_path FROM image_hashes 
         WHERE id IN ({id_placeholders})
     ''', candidate_ids)
     

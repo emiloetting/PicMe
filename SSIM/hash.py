@@ -3,11 +3,8 @@ import numpy as np
 import sqlite3
 from typing import List, Dict
 from tqdm import tqdm
-import multiprocessing as mp
 
 
-
-  
 def hamming_distance(hash1, hash2):
     """
     calculates the hamming distance of two hashes
@@ -26,12 +23,12 @@ def hamming_distance(hash1, hash2):
     
 
 class Hash:
-    def __init__(self, db_path: str, image_path: str):
+    def __init__(self, db_path: str):
         self.db_path = db_path
-        self.image_path = image_path
 
 
-    def compute_hash(self):
+
+    def compute_hash(self, image_path: str):
         """
         calculates the hash of an image
         loads the image as 32x32 gray-scale
@@ -42,12 +39,12 @@ class Hash:
             image_path: path to the image
 
         Returns:
-            wavelet hash
+            hash
         """
         try:
-            image = cv2.imread(str(self.image_path), cv2.IMREAD_GRAYSCALE)
+            image = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
             if image is None:
-                raise Exception(f"could not load image {self.image_path}")
+                raise Exception(f"could not load image {image_path}")
             
             # 32x32 images
             img_32 = cv2.resize(image, (32, 32), interpolation=cv2.INTER_AREA)
@@ -67,7 +64,7 @@ class Hash:
             return hash_string
             
         except Exception as e:
-            print(f"error creating hash for {self.image_path}: {e}")
+            print(f"error creating hash for {image_path}: {e}")
             return None
 
     def add_hash_column(self):
@@ -81,18 +78,18 @@ class Hash:
         cursor = conn.cursor()
         
         try:
-            cursor.execute("PRAGMA table_info (whole_db)")
+            cursor.execute("PRAGMA table_info (image_hashes)")
             columns = [col[1] for col in cursor.fetchall()]
             
-            if 'wavelet_hash' not in columns:
-                cursor.execute('ALTER TABLE whole_db ADD COLUMN wavelet_hash TEXT')
+            if 'hash' not in columns:
+                cursor.execute('ALTER TABLE image_hashes ADD COLUMN hash TEXT')
                 print("added hash column")
             else:
                 print("hash column already exists")
                 
             cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_wavelet_hash 
-                ON whole_db(wavelet_hash)
+                CREATE INDEX IF NOT EXISTS idx_hash 
+                ON image_hashes(hash)
             ''')
             
             conn.commit()
@@ -113,21 +110,21 @@ class Hash:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, image_path FROM whole_db 
-            WHERE wavelet_hash IS NULL
+            SELECT id, image_path FROM image_hashes 
+            WHERE hash IS NULL
         ''')
         
         results = cursor.fetchall()
         conn.close()
         return results
 
-    def update_hash(self, image_id: int, wavelet_hash: str):
+    def update_hash(self, image_id: int, hash: str):
         """
         updates the hash of an image
         
         Args:
             image_id: id of the image
-            wavelet_hash: hash of the image
+            hash: hash of the image
 
         Returns:
             None
@@ -136,10 +133,10 @@ class Hash:
         cursor = conn.cursor()
         
         cursor.execute('''
-            UPDATE whole_db 
-            SET wavelet_hash = ? 
+            UPDATE image_hashes 
+            SET hash = ? 
             WHERE id = ?
-        ''', (wavelet_hash, image_id))
+        ''', (hash, image_id))
         
         conn.commit()
         conn.close()
@@ -216,8 +213,8 @@ class Hash:
             cursor.execute("BEGIN TRANSACTION")
             
             cursor.executemany('''
-                UPDATE whole_db 
-                SET wavelet_hash = ? 
+                UPDATE image_hashes 
+                SET hash = ? 
                 WHERE id = ?
             ''', hash_updates)
             
@@ -233,25 +230,6 @@ class Hash:
 class HashDatabase:    
     def __init__(self, db_path: str):
         self.db_path = db_path
-        self.init_database()
-    
-    def init_database(self):
-
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS image_hashes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                image_path TEXT UNIQUE,
-                phash TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
-    
     
     def get_all_hashes(self):
         """
@@ -264,7 +242,7 @@ class HashDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT id, wavelet_hash FROM whole_db')
+        cursor.execute('SELECT id, hash FROM image_hashes')
         results = cursor.fetchall()
         conn.close()
         
@@ -317,10 +295,22 @@ def get_similar_images(image_path: str, db_path: str, max_distance: int = 30, ma
     """
 
     db = HashDatabase(db_path)
-    query_hash = Hash(db_path, image_path).compute_hash()
+    query_hash = Hash(db_path).compute_hash(image_path)
     results = db.find_similar(query_hash, max_distance, max_results)
     return results
 
 
+def insert_hashes (db_path):
+    """
+    adds hashes to the database
 
+    Args:
+        db_path: path to database
+
+    Returns:
+        None
+    """
+
+    Hash(db_path).calc_and_add_hashes()
+    print("hashes added")
 

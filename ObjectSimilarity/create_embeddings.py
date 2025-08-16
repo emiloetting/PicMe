@@ -25,8 +25,9 @@ def image_embeddings_with_paths(folder_path):
     folder = Path(folder_path)
     image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif"]
     
-    for pattern in image_extensions:
-        for image_path in tqdm.tqdm(folder.rglob(pattern)):
+
+    for image_path in tqdm.tqdm(folder.rglob("*.*")):
+        if image_path.suffix.lower() in image_extensions:
             try:
                 image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
                 with torch.no_grad():

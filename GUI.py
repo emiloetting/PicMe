@@ -154,7 +154,7 @@ class FinderWorker(QThread):
             
             elif mode == "ssim":
                 cwd = os.getcwd()
-                db_path = os.path.join(cwd, "SSIM", "500k3.db")
+                db_path = os.path.join(cwd, "SSIM", "hash_database.db")
                 sorted_paths = (get_ssim(current, db_path))
 
             elif mode == "objects":
