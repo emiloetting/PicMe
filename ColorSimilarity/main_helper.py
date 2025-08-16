@@ -2,18 +2,25 @@ import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 import cv2 as cv
-from colorClusterquantized import *
+from ColorSimilarity.colorClusterquantized import *
 import time
 from pyemd import emd_with_flow
 import annoy as ann
 import os
+import sqlite3
+
+# Try to import from DataBase package, fall back to hardcoded values
+try:
+    from DataBase.backend_setup import L_BINS, A_BINS, B_BINS
+except ModuleNotFoundError:
+    from backend_setup import L_BINS, A_BINS, B_BINS
 
 
 
-ann_idx_path = os.path.join(os.getcwd(), 'ColorSimilarity', 'color_index_l2.ann')
+ann_idx_path = os.path.join(os.getcwd(), 'DataBase', 'color_ann_index.ann')
 ann_idx = ann.AnnoyIndex(L_BINS*A_BINS*B_BINS, 'angular')
 ann_idx.load(ann_idx_path)
-
+cwd = os.getcwd()
 
 # HELPER-MODULE CONTAINING FUNCTIONS FOR MAIN.PY----------------------------------
 
@@ -154,18 +161,16 @@ def visualize(img_path: list[str], sim_imgs: list, cos_vals: NDArray, emd_dists:
 
 
 def calc_emd_and_final(input_vec_l1: NDArray,
-                        idx: NDArray, 
                         cosine_values: NDArray, 
-                        l1_emb: NDArray, 
+                        l1_embeds: NDArray, 
                         emd_cost_mat: NDArray|None) -> list[list]:   
         
     """ Calculates the EMD and final metric for the given indices and similar images."""
     emd_values = []
     final_metrics = []
 
-    for i, idx in enumerate(idx):
-        # Get complete EMD for 
-        db_hist = l1_emb[idx].astype(np.float64)
+    for i, l1_hist in enumerate(l1_embeds):
+        db_hist = np.frombuffer(l1_hist, dtype=np.float64)
         dist , _ = emd_with_flow(input_vec_l1, db_hist, distance_matrix=emd_cost_mat)
         emd_values.append(float(dist))
         final_metrics.append(dist / max(cosine_values[i], 1e-9))
@@ -262,8 +267,6 @@ def work_that_vectors(input_vec_l1: NDArray,
 def work_that_vectors_ann(input_vec_l1: NDArray,
                     input_vec_l2: NDArray,
                     input_img_paths: list[str],
-                    db_img_paths: list[str], 
-                    l1_emb: NDArray, 
                     annoy_index: ann.AnnoyIndex, 
                     emd_cost_mat: NDArray|None, 
                     img_weights: list[float]|None=None,
@@ -299,8 +302,20 @@ def work_that_vectors_ann(input_vec_l1: NDArray,
     indices, distances = annoy_index.get_nns_by_vector(input_vec_l2, num_results, include_distances=True)
     cosine_values = 1 - np.array(distances)**2 / 2  # make cosine sim from angular distances
 
-    # Paths in initial order (by cosine similarity)
-    sim_ordered_paths = [db_img_paths[index] for index in indices]
+    # Call to DB for L1 embeddings
+    dst_dir = os.path.join(cwd, 'DataBase', 'color_database.db')
+    connection = sqlite3.connect(dst_dir)
+    cursor = connection.cursor()
+
+    placeholders = ','.join('?' for _ in indices)
+    query = f"SELECT L1_embedding, path FROM color_db WHERE ann_index IN ({placeholders})"
+    cursor.execute(query, tuple(indices))
+    results = cursor.fetchall()
+
+    # split into desired lists
+    l1_embeddings = [row[0] for row in results]
+    sim_ordered_paths = [row[1] for row in results]
+
 
     if track_time:
         print(f"Annoy search time: {time.time()-start:.3f}s")
@@ -309,21 +324,21 @@ def work_that_vectors_ann(input_vec_l1: NDArray,
     # Berechne EMD für die angegebene Anzahl von Bildern
     # Nutze min() um sicherzustellen, dass wir nicht mehr Bilder verarbeiten als wir haben
     emd_calc_size = min(emd_count, len(indices))
-    top_indices = indices[:emd_calc_size]
     top_cosine_values = cosine_values[:emd_calc_size]
     
     emd_values, final_metrics = calc_emd_and_final(
         input_vec_l1, 
-        top_indices, 
         top_cosine_values, 
-        l1_emb, 
+        l1_embeddings, 
         emd_cost_mat
     )
     
+
     # Sortiere die Bilder mit EMD-Berechnung nach final_metrics
-    top_paths = [db_img_paths[i] for i in top_indices]
+    top_paths = [sim_ordered_paths[i] for i in range(emd_calc_size)]
     sorted_indices = np.argsort(final_metrics)  # sort ascending by final metrics
     sorted_top_paths = [top_paths[i] for i in sorted_indices]
+    
     
     # Ersetze die entsprechenden Einträge in sim_ordered_paths mit den sortierten
     sim_ordered_paths[:emd_calc_size] = sorted_top_paths
@@ -334,8 +349,8 @@ def work_that_vectors_ann(input_vec_l1: NDArray,
     if show:
         visualize(
             input_img_paths, 
-            sim_ordered_paths[:12],  # 12 since we have 12 spaces in the visualization
-            cosine_values[:12],      # 12 since we have 12 spaces in the visualization
+            sim_ordered_paths[:12], 
+            cosine_values[:12],      
             emd_values,
             final_metrics,
             sort_by='final', 
@@ -395,8 +410,6 @@ def color_match_single(img_path: list[str],
                       show=show)
     
 def color_match_single_ann(img_path: list[str], 
-                        db_img_paths: list[str], 
-                        l1_emb: NDArray, 
                         annoy_index: ann.AnnoyIndex, 
                         l_bins: int, a_bins: int, b_bins: int, 
                         emd_cost_mat: NDArray|None, 
@@ -424,9 +437,9 @@ def color_match_single_ann(img_path: list[str],
     # Keep track of time if desired
     if track_time:
         start = time.time()
-
-    input_vector_l2 = quantized_image(img_path[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L2')
-    input_vector_l1 = quantized_image(img_path[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L1', adjusted_bin_size=adjusted_bin_size).astype(np.float64)
+    img = cv2.imread(img_path[0])
+    input_vector_l2 = quantized_image(img, l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L2')
+    input_vector_l1 = quantized_image(img, l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization='L1', adjusted_bin_size=adjusted_bin_size).astype(np.float64)
 
     if track_time:
         print(f'Hists for input took: {time.time()-start:.3f}s')
@@ -436,8 +449,6 @@ def color_match_single_ann(img_path: list[str],
     return work_that_vectors_ann(input_vec_l1=input_vector_l1, 
                       input_vec_l2=input_vector_l2, 
                       input_img_paths=img_path,
-                      db_img_paths=db_img_paths,
-                      l1_emb=l1_emb, 
                       annoy_index=annoy_index, 
                       emd_cost_mat=emd_cost_mat,
                       num_results=num_results,  # Use batch_size as number of results
@@ -480,18 +491,18 @@ def color_match_double(img_paths: list[str],
     assert isinstance(img_paths, (list, tuple)) and len(img_paths) == 2, f"img_paths must be a list containing exactly two image paths, got {img_paths}"
 
     # Extract paths
-    img_path1, img_path2 = img_paths
+    img1, img2 = cv.imread(img_paths[0]), cv.imread(img_paths[1])
 
     # Track time if desired
     if track_time:
         start = time.time()
 
     # Calc L1 and L2 normalized vectors for both images
-    combined_vec_l1 = quantize2images(filepaths=[img_path1, img_path2],
+    combined_vec_l1 = quantize2images(filepaths=[img1, img2],
                                       l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
                                       normalization='L1', weights=img_weights).astype(np.float64)
 
-    combined_vec_l2 = quantize2images(filepaths=[img_path1, img_path2],
+    combined_vec_l2 = quantize2images(filepaths=[img1, img2],
                                       l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
                                       normalization='L2', weights=img_weights).astype(np.float64)
 
@@ -513,8 +524,6 @@ def color_match_double(img_paths: list[str],
                       show=show)
 
 def color_match_double_ann(img_paths: list[str], 
-                        db_img_paths: list[str], 
-                        l1_emb: NDArray, 
                         annoy_index: ann.AnnoyIndex, 
                         l_bins: int, a_bins: int, b_bins: int, 
                         emd_cost_mat: NDArray|None, 
@@ -547,18 +556,18 @@ def color_match_double_ann(img_paths: list[str],
     assert isinstance(img_paths, (list, tuple)) and len(img_paths) == 2, f"img_paths must be a list containing exactly two image paths, got {img_paths}"
 
     # Extract paths
-    img_path1, img_path2 = img_paths
+    img1, img2 = cv2.imread(img_paths[0]), cv2.imread(img_paths[1])
 
     # Track time if desired
     if track_time:
         start = time.time()
 
     # Calc L1 and L2 normalized vectors for both images
-    combined_vec_l1 = quantize2images(filepaths=[img_path1, img_path2],
+    combined_vec_l1 = quantize2images(images=[img1, img2],
                                       l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
                                       normalization='L1', adjusted_bin_size=adjusted_bin_size, weights=img_weights).astype(np.float64)
 
-    combined_vec_l2 = quantize2images(filepaths=[img_path1, img_path2],
+    combined_vec_l2 = quantize2images(images=[img1, img2],
                                       l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, 
                                       normalization='L2', adjusted_bin_size=False, weights=img_weights).astype(np.float64)
 
@@ -569,9 +578,7 @@ def color_match_double_ann(img_paths: list[str],
     # Calc sims
     return work_that_vectors_ann(input_vec_l1=combined_vec_l1, 
                       input_vec_l2=combined_vec_l2, 
-                      input_img_paths=[img_path1, img_path2],
-                      db_img_paths=db_img_paths,
-                      l1_emb=l1_emb, 
+                      input_img_paths=img_paths,
                       annoy_index=annoy_index, 
                       emd_cost_mat=emd_cost_mat,
                       num_results=num_results,  # Use batch_size as number of results
