@@ -1,56 +1,60 @@
 import os 
 import sys
+import shutil
 import gdown
+from tqdm import tqdm
 
 
-# --------Skript to set up and download all required files for user to run the project---------------------------
+# --------Script to set up and download all required files for user to run the project---------------------------
 
 if __name__ == "__main__":
 
     cwd = os.getcwd()
 
-    # Define address of Google Drive folder to grab ANNOY-Index 
-    color_index_file_id = None  # replace with actual ANN-index name
-    ssim_index_file_id = None  # replace with actual SSIM index name
-    db_path_file_id = None  # replace with actual path to database
-    emd_cost_matrix_file_id = None  # replace with actual EMD cost matrix name
+    # Define dict for file mapping
+    mapping = {
+        'color_ann_index.ann': os.path.join(cwd, "DataBase", "color_ann_index.ann"),
+        'color_database.db': os.path.join(cwd, "DataBase", "color_database.db"),
+        'emd_cost_full.npy': os.path.join(cwd, "DataBase", "emd_cost_full.npy"),
+        'FullHists_L1.npy': os.path.join(cwd, "DataBase", "color_db_components", "FullHists_L1.npy"),
+        'FullHists_L2.npy': os.path.join(cwd, "DataBase", "color_db_components", "FullHists_L2.npy"),
+        "image_paths.npy": os.path.join(cwd, "DataBase", "color_db_components", "image_paths.npy"),
+        "image_sizes.npy": os.path.join(cwd, "DataBase", "color_db_components", "image_sizes.npy")
+    }
 
-    # Define output paths
-    color_index_output = os.path.join(cwd, "ColorSimilarity", "color_index_l2.ann")  # replace with actual output directory
-    ssim_index_output = os.path.join(cwd, "ObjectSimilarity", "ssim_index_l2.ann")  # replace with actual output directory
-    db_path_output = os.path.join(cwd, "Database", "database.db")  # replace with actual output directory
-    emd_cost_matrix_output = os.path.join(cwd, "ColorSimilarity", "CostMatrix_full2.ann")  # replace with actual output directory
+    # Define folder ID
+    folder_id = "1SEedjrkLqvSTt6i-mWCpVSWMxAMCV43i"
 
+    # create temporary dir
+    temp_dir = os.path.join(cwd, "temp_data")
+    os.makedirs(temp_dir, exist_ok=True)
 
-    # Make sure destination directories exist
-    os.makedirs(os.path.dirname(color_index_output), exist_ok=True)
-    os.makedirs(os.path.dirname(ssim_index_output), exist_ok=True)
-    os.makedirs(os.path.dirname(db_path_output), exist_ok=True)
-    os.makedirs(os.path.dirname(emd_cost_matrix_output), exist_ok=True)
+    # Load from GDrive
+    gdown.download_folder(f"https://drive.google.com/drive/folders/{folder_id}", output=temp_dir, quiet=False, resume=True)
 
+    # Init list with files to be deleted
+    to_be_deleted = []
 
-    # Check whether files already exist
-    if os.path.exists(color_index_output):
-        print(f"{color_index_output} already exists.")
-    if os.path.exists(ssim_index_output):
-        print(f"{ssim_index_output} already exists.")
-    if os.path.exists(db_path_output):
-        print(f"{db_path_output} already exists.")
-    if os.path.exists(emd_cost_matrix_output):
-        print(f"{emd_cost_matrix_output} already exists.")
+    # Redistribute loaded files into respective dst-dir
+    with tqdm(total=len(os.listdir(temp_dir)), desc="Moving files") as pbar:
+        for file in os.listdir(temp_dir):
+            if file in mapping:
+                src = os.path.join(temp_dir, file)
+                dst = mapping[file]
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.move(src, dst)
+            else:
+                print(f"Calabria (destination unknown): No destination found for file <{file}> ")
+                to_be_deleted.append(os.path.join(temp_dir, file))
+            pbar.update(1)
 
+    # Name all files to be deleted due to no dst dir
+    if len(to_be_deleted) > 0:
+        print(f"Files to be deleted:")
+        for file in to_be_deleted:
+            print(file)
 
-    # Actual download process
-    if not os.path.exists(color_index_output):
-        gdown.download(f"https://drive.google.com/uc?id={color_index_file_id}", color_index_output, quiet=False)
-
-    if not os.path.exists(ssim_index_output):
-        gdown.download(f"https://drive.google.com/uc?id={ssim_index_file_id}", ssim_index_output, quiet=False)
-
-    if not os.path.exists(db_path_output):
-        gdown.download(f"https://drive.google.com/uc?id={db_path_file_id}", db_path_output, quiet=False)
-
-    if not os.path.exists(emd_cost_matrix_output):
-        gdown.download(f"https://drive.google.com/uc?id={emd_cost_matrix_file_id}", emd_cost_matrix_output, quiet=False)
+    # Remove temp dir
+    shutil.rmtree(temp_dir)
 
     sys.exit()
