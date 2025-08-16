@@ -1,3 +1,4 @@
+import os
 import cv2	
 import	numpy as np
 from numpy.typing import NDArray
@@ -13,7 +14,7 @@ def quantized_image(img: NDArray, l_bins: int, a_bins: int, b_bins: int, normali
         l_bins (int): Amount of bins on lightness-channel
         a_bins (int): Amount of bins on a-channel
         b_bins (int): Amount of bins on b-channel
-        normalization (str): Type of normalization to apply ('L1' or 'L2')
+        normalization (str|None): Type of normalization to apply ('L1' or 'L2')
         adjusted_bin_size (bool): Whether to adjust bin sizes for faster EMD calculation when normalization is 'L1'
 
     Returns:
@@ -27,14 +28,6 @@ def quantized_image(img: NDArray, l_bins: int, a_bins: int, b_bins: int, normali
     rsz_img = downscale_to_fix_size(img=img, max_pixels=1_000_000)
     lab_img = cv2.cvtColor(rsz_img, cv2.COLOR_BGR2Lab)
 
-    # Median-Filter auf a und b
-    # l, a, b = cv2.split(lab_img)
-    # a = cv2.medianBlur(a, ksize=3)
-    # b = cv2.medianBlur(b, ksize=3)
-
-    # In echten CIE-LAB Farbraum konvertieren
-    # cie_lab = cv_to_cie(cv2.merge([l, a, b]))
-
     # For faster emd-calc: smaller bins for L1 normalization
     if normalization == 'L1' and adjusted_bin_size:
         l_bins = max(1, round(l_bins/1.3))  # Ensure at least 1 bin
@@ -42,6 +35,7 @@ def quantized_image(img: NDArray, l_bins: int, a_bins: int, b_bins: int, normali
         b_bins = max(1, round(b_bins/1.3))
 
     cie_lab = cv_to_cie(lab_img)
+    
     # flatten
     pixels = cie_lab.reshape(-1, 3)
     l, a, b = pixels[:, 0], pixels[:, 1], pixels[:, 2]
@@ -69,6 +63,19 @@ def quantized_image(img: NDArray, l_bins: int, a_bins: int, b_bins: int, normali
 
 
 def get_bin_centers(l_bins: int, a_bins: int, b_bins: int) -> np.ndarray:
+    """Returns the centers of the bins in CIE-LAB color space.
+
+    Args:
+        l_bins (int): Number of bins in L channel.
+        a_bins (int): Number of bins in A channel.
+        b_bins (int): Number of bins in B channel.
+
+    Returns:
+        np.ndarray: Array of shape (n_bins, 3) containing the center coordinates of each bin.
+    """
+    assert l_bins > 0 and a_bins > 0 and b_bins > 0, "Number of bins must be greater than 0"
+    assert isinstance(l_bins, int) and isinstance(a_bins, int) and isinstance(b_bins, int), "Number of bins must be integers"
+
     l_edges = np.linspace(0, 100, l_bins + 1)
     a_edges = np.linspace(-128, 127, a_bins + 1)
     b_edges = np.linspace(-128, 127, b_bins + 1)
@@ -98,12 +105,23 @@ def cv_to_cie(img: NDArray) -> NDArray:
 
 
 def downscale(img:NDArray) -> NDArray:
-    "Downscales image if images reaches certain size. Magnitude of downscaling depends on image size."
+    """Downscales image if images reaches certain size. Magnitude of downscaling depends on image size.
+
+    Args:
+        img (NDArray): Image to downscale.
+
+    Returns:
+        NDArray: Downscaled image.
+    """
+    assert isinstance(img, np.ndarray), f"Input must be a numpy array, not {type(img)}"
+    assert img.ndim in [2, 3], f"Input image must be 2D or 3D, not {img.ndim}D"
+    assert img.size > 0, "Input image must not be empty"
+
     size = img.shape[:2]
     img_pxl_count = size[0] * size[1]
 
     size_dict = {
-        # every size below 2MP: no scaling
+        # every size below 4MP: no scaling
         (4_000_000, 8_000_000): 0.7071,
         (8_000_001, float(np.inf)): 0.5,
     }
@@ -118,8 +136,9 @@ def downscale(img:NDArray) -> NDArray:
             new_w = max(1,int(round(size[1]*scale_factor)))
             return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)  # resized
 
-    # Only catches if pxl count outside defined intervals
+    # Only catches if pxl count outside defined intervals -> smaller than 4MP
     return img
+
 
 def downscale_to_fix_size(img: NDArray, max_pixels: int = 250_000) -> NDArray:
     """
@@ -132,10 +151,15 @@ def downscale_to_fix_size(img: NDArray, max_pixels: int = 250_000) -> NDArray:
     Returns:
         NDArray: possibly downscaled image
     """
+    assert isinstance(img, np.ndarray), f"Input must be a numpy array, not {type(img)}"
+    assert img.ndim in [2, 3], f"Input image must be 2D or 3D, not {img.ndim}D"
+    assert img.size > 0, "Input image must not be empty"
+    assert isinstance(max_pixels, int) and max_pixels > 0, f"max_pixels must be a positive integer, not {max_pixels}"
+
     h, w = img.shape[:2]
     curr_pixels = h * w
 
-    # Skip if img small enough
+    # Early return with no changes made if img small enough
     if curr_pixels <= max_pixels:
         return img
 
@@ -169,6 +193,7 @@ def quantize2images(images: list[str], l_bins: int, a_bins: int, b_bins: int, no
 
     assert np.sum(weights) == 2, f"Weights must sum to 2. Current sum: {np.sum(weights)}"
     assert not (normalization != 'L1' and adjusted_bin_size), f"Adjusted bin size can only be used with normalization 'L1', not '{normalization}'"
+    assert not (normalization != 'L1' and adjusted_bin_size), f"Adjusted bin size can only be used with normalization 'L1', not '{normalization}'"
 
     # Check how weights are balanced and skip unnecessary computations
     if float(weights[0]) == 0.0:
@@ -182,7 +207,6 @@ def quantize2images(images: list[str], l_bins: int, a_bins: int, b_bins: int, no
     hist_1 = quantized_image(images[0], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[0])
     hist_2 = quantized_image(images[1], l_bins=l_bins, a_bins=a_bins, b_bins=b_bins, normalization=normalization, adjusted_bin_size=adjusted_bin_size)*float(weights[1])
     combined_hist = np.sum([hist_1, hist_2], axis=0)
-
 
     # Normalize sum as well
     if normalization == 'L1':
