@@ -23,7 +23,7 @@ def image_embeddings_with_paths(folder_path):
     """
 
     folder = Path(folder_path)
-    image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif"]
+    image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
     
 
     for image_path in tqdm.tqdm(folder.rglob("*.*")):
@@ -66,8 +66,4 @@ def create_ann(folder_path):
     
     return path_mapping
 
-
-# if __name__ == "__main__":
-#     mapping = create_ann(folder_path)
-#     print(f" {len(mapping)} images")
 
