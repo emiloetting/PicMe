@@ -10,10 +10,8 @@ import os
 cwd = os.getcwd()
 path_to_database = os.path.join(cwd, "DataBase")
 
-
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
-
 
 def image_embeddings_with_paths(folder_path):
     """
@@ -63,11 +61,9 @@ def create_ann(folder_path):
             print(f"Error adding {image_path} to index: {e}")
     
     index.build(20)
-    index.save(f"{path_to_database}/{folder_path}.ann")
+    index.save(f"{path_to_database}/new_images.ann")
     
-    with open(f"{path_to_database}/{folder_path}_paths.json", "w") as f:
+    with open(f"{path_to_database}/new_imgaes_paths.json", "w") as f:
         json.dump(path_mapping, f)
     
     return path_mapping
-
-
