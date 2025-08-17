@@ -2,11 +2,11 @@ name: Testing & Profiling
 on:
   push:
     branches:
-      - main
+      - GUI
   
   pull_request:
     branches: 
-      - main
+      - GUI
 
 jobs:
 # Start with linting -> if fails, no testing possible
