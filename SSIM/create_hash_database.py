@@ -46,7 +46,7 @@ class DatabaseBuilder:
         folder = Path(image_directory)
         
 
-        for image_path in tqdm.tqdm(folder.rglob("*.*")):
+        for image_path in tqdm(folder.rglob("*.*")):
             if image_path.suffix.lower() in extensions:
                 try:
                     yield str(image_path)

@@ -16,10 +16,13 @@ def hamming_distance(hash1, hash2):
     Returns:
         hamming distance
     """
-    int1 = int(hash1, 2)
-    int2 = int(hash2, 2)
-    xor_result = int1 ^ int2
-    return bin(xor_result).count('1')
+    try:
+        int1 = int(hash1, 2)
+        int2 = int(hash2, 2)
+        xor_result = int1 ^ int2
+        return bin(xor_result).count('1')
+    except Exception as e:
+        return float('inf')
     
 
 class Hash:
