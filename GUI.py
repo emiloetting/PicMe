@@ -8,7 +8,7 @@ from PyQt5.QtGui import QPixmap, QIcon, QMovie
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
 from ColorSimilarity.main_helper import *
 from SSIM.ssim import get_ssim
-from ObjectSimilarity.similar_image import get_best_images
+from ObjectSimilarity.similar_image import get_best_images_annoy
 from DataBase.color_backend_setup import L_BINS, A_BINS, B_BINS
 
 
@@ -152,7 +152,7 @@ class FinderWorker(QThread):
                 cwd = os.getcwd()
                 ann_file = os.path.join(cwd, "Database", "clip_embeddings.ann")
                 json_file = os.path.join(cwd, "DataBase", "clip_embeddings_paths.json")
-                sorted_paths = (get_best_images(current, json_file, ann_file, num_results=12))
+                sorted_paths = (get_best_images_annoy(current, json_file, ann_file, num_results=12))
 
             else:
                 sorted_paths = []

@@ -5,6 +5,10 @@ from PIL import Image
 from annoy import AnnoyIndex
 from pathlib import Path
 import tqdm
+import os
+
+cwd = os.getcwd()
+path_to_database = os.path.join(cwd, "DataBase")
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -59,9 +63,9 @@ def create_ann(folder_path):
             print(f"Error adding {image_path} to index: {e}")
     
     index.build(20)
-    index.save("500k.ann")
+    index.save(f"{path_to_database}/{folder_path}.ann")
     
-    with open("test_pictures_paths.json", "w") as f:
+    with open(f"{path_to_database}/{folder_path}_paths.json", "w") as f:
         json.dump(path_mapping, f)
     
     return path_mapping

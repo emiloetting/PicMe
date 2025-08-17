@@ -30,7 +30,7 @@ def get_image_embedding(image_path: str):
         print(f"Error processing {image_path}: {e}")
 
 
-def get_best_images(input_images: Union[str, List[str]], index_to_path_json: str, annfile: str, num_results: int = 5):
+def get_best_images_annoy(input_images: Union[str, List[str]], index_to_path_json: str, annfile: str, num_results: int = 5):
     """
     gets the best matching images from annoy index
     based on cosine similarity of clip embeddings

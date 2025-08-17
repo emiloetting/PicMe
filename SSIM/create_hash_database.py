@@ -5,6 +5,10 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import List
 import datetime
+import os
+
+cwd = os.getcwd()
+path_to_database_folder = os.path.join(cwd, "DataBase")
 
 
 class DatabaseBuilder:
@@ -149,5 +153,5 @@ def build_complete_database(db_path: str, image_directory: str):
     builder.add_images(image_directory)
 
 if __name__ == "__main__":
-    build_complete_database("hash_database.db", "image_path")
+    build_complete_database(f"{path_to_database_folder}/new_databse.db", "image_directory_path")
 
