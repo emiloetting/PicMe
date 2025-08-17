@@ -1,0 +1,8 @@
+*.db
+*.ann
+*.json
+.venv/
+__pycache__/
+DataBase/*
+!DataBase/color_backend_setup.py
+Profiling/*
