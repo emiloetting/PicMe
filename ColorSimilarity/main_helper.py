@@ -7,14 +7,7 @@ from pyemd import emd_with_flow
 import annoy as ann
 import os
 import sqlite3
-
-# Try to import from DataBase package, fall back to hardcoded values
-try:
-    from DataBase.color_backend_setup import L_BINS, A_BINS, B_BINS
-except ModuleNotFoundError:
-    from backend_setup import L_BINS, A_BINS, B_BINS
-
-
+from Initialization.setup import L_BINS, A_BINS, B_BINS
 
 ann_idx_path = os.path.join(os.getcwd(), 'DataBase', 'color_ann_index.ann')
 ann_idx = ann.AnnoyIndex(L_BINS*A_BINS*B_BINS, 'angular')
