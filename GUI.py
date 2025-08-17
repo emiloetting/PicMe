@@ -172,7 +172,7 @@ class GUI(QMainWindow):
         # Window
         self.setWindowTitle("PicMe - Pixel-Informed Content-Matching Engine")
         self.resize(1200, 800)
-        self.setWindowIcon(QIcon(os.path.join("logos", "PicMe_logo.png")))
+        self.setWindowIcon(QIcon(os.path.join("GUI_data", "PicMe_logo.png")))
         self.setStyleSheet("""
         QMainWindow { background-color: #011126; }
         QFrame#DashedBox {
@@ -213,7 +213,7 @@ class GUI(QMainWindow):
         # Logo
         logo_wrap = QWidget(); logo_h = QHBoxLayout(logo_wrap); logo_h.setContentsMargins(0,0,0,0)
         logo = QLabel()
-        pm = QPixmap(os.path.join("logos", "PicMe_logo_cleaned.png"))
+        pm = QPixmap(os.path.join("GUI_data", "PicMe_logo_cleaned.png"))
         logo.setPixmap(pm.scaled(220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation) if not pm.isNull() else QPixmap())
         logo_h.addWidget(logo)
         self.left_layout.addWidget(logo_wrap)
@@ -316,7 +316,7 @@ class GUI(QMainWindow):
         _rl.setSpacing(6)
 
         self.loader_gif = QLabel(); self.loader_gif.setAlignment(Qt.AlignCenter)
-        gif_path = "loading.gif"  
+        gif_path = "GUI_data/loading.gif"  
         self.loader_movie = QMovie(gif_path)
         self.loader_gif.setMovie(self.loader_movie)
 
@@ -500,7 +500,7 @@ class GUI(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(os.path.join("logos", "PicMe_logo.png")))
+    app.setWindowIcon(QIcon(os.path.join("GUI_data", "PicMe_logo.png")))
     gui = GUI()
     gui.show()
     sys.exit(app.exec_())
