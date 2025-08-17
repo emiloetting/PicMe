@@ -23,7 +23,7 @@ def image_embeddings_with_paths(folder_path):
     """
 
     folder = Path(folder_path)
-    image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif"]
+    image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
     
 
     for image_path in tqdm.tqdm(folder.rglob("*.*")):
