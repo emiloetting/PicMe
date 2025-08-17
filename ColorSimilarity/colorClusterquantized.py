@@ -103,42 +103,6 @@ def cv_to_cie(img: NDArray) -> NDArray:
     return cv2.merge([l, a, b])
 
 
-def downscale(img:NDArray) -> NDArray:
-    """Downscales image if images reaches certain size. Magnitude of downscaling depends on image size.
-
-    Args:
-        img (NDArray): Image to downscale.
-
-    Returns:
-        NDArray: Downscaled image.
-    """
-    assert isinstance(img, np.ndarray), f"Input must be a numpy array, not {type(img)}"
-    assert img.ndim in [2, 3], f"Input image must be 2D or 3D, not {img.ndim}D"
-    assert img.size > 0, "Input image must not be empty"
-
-    size = img.shape[:2]
-    img_pxl_count = size[0] * size[1]
-
-    size_dict = {
-        # every size below 4MP: no scaling
-        (4_000_000, 8_000_000): 0.7071,
-        (8_000_001, float(np.inf)): 0.5,
-    }
-
-    for intervall, scale_factor in size_dict.items():
-
-        # Check if pxl count in interval
-        if (intervall[0] <= img_pxl_count <= intervall[1]):
-            
-            # make work on row or col-like imgs
-            new_h = max(1,int(round(size[0]*scale_factor)))
-            new_w = max(1,int(round(size[1]*scale_factor)))
-            return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)  # resized
-
-    # Only catches if pxl count outside defined intervals -> smaller than 4MP
-    return img
-
-
 def downscale_to_fix_size(img: NDArray, max_pixels: int = 250_000) -> NDArray:
     """
     Scales image to fixed size of max_pixels while keeping aspect ratio.
