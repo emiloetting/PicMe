@@ -7,6 +7,10 @@ from tqdm import tqdm
 
 # --------Script to set up and download all required files for user to run the project---------------------------
 
+L_BINS = 5
+A_BINS = 9
+B_BINS = 9
+
 if __name__ == "__main__":
 
     cwd = os.getcwd()
