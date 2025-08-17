@@ -1,26 +1,8 @@
-ImageData/*
-__pycache__/
-<<<<<<< HEAD
-ColorSimilarity/test_images/*
-ColorSimilarity/*.npy
-ColorSimilarity/*.ann
-.venv/
-logos/*
-!logos/PicMe_logo_cleaned.png
-DataBase/*
-Analysis/*.npy
-Analysis/*.pkl
-*.jpg
-!test_img_1.jpg
-!test_img_2.jpg
-Profiling/profiles_html/*
-*.db
-ObjectSimilarity/*.ann
-ObjectSimilarity/*.json
-=======
-
 *.db
 *.ann
 *.json
-
->>>>>>> Annoy
+.venv/
+__pycache__/
+ImageData/*
+DataBase/*
+Profiling/
