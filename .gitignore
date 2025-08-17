@@ -5,4 +5,4 @@
 __pycache__/
 ImageData/*
 DataBase/*
-Profiling/
+Profiling/*
