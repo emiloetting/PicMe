@@ -12,7 +12,7 @@ from ObjectSimilarity.similar_image import get_best_images_annoy
 from Initialization.setup import L_BINS, A_BINS, B_BINS
 
 
-# REMOVE LATER JUST FOR NO DB WORKING:
+
 cwd = os.getcwd()
 cost_mat_path = os.path.join(cwd, "DataBase", "emd_cost_full.npy")
 ann_index_path = os.path.join(cwd, "DataBase","color_ann_index.ann")
