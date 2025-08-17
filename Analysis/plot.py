@@ -41,14 +41,16 @@ if __name__ == "__main__":
         y=reduced_embeds[:, 1],
         color=labels.astype(str),
         title="2D CLIP-embeddings colored via KMeans-clustering",
-        opacity=0.6,
-        size_max=1
+        opacity=0.6
     )
+
+    # Alle Punkte gleich groß machen
+    fig.update_traces(marker=dict(size=1.0))  # Sehr winzig
 
     x_range = max(reduced_embeds[:, 0]) - min(reduced_embeds[:, 0])
     y_range = max(reduced_embeds[:, 1]) - min(reduced_embeds[:, 1])
     
-    image_scale = 0.05
+    image_scale = 0.03
     image_size_x = x_range * image_scale
     image_size_y = y_range * image_scale
 
@@ -76,10 +78,12 @@ if __name__ == "__main__":
             )
 
     fig.update_layout(
-        showlegend=True,
+        showlegend=False,
         width=1400,
         height=1000,
-        margin=dict(l=50, r=50, t=50, b=50)
+        margin=dict(l=50, r=50, t=50, b=50),
+        plot_bgcolor='white',
+        paper_bgcolor='white'
     )
 
     fig.write_html("Analysis/cluster_plot.html")
