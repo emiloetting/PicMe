@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QLabel, QFrame, QToolButton, QPushButton, QSizePolicy, QGridLayout, QSlider, QRadioButton, QButtonGroup
 )
 from PyQt5.QtGui import QPixmap, QIcon, QMovie
-from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread
+from PyQt5.QtCore import Qt, pyqtSignal, QThread
 from ColorSimilarity.main_helper import *
 from SSIM.ssim import get_ssim
 from ObjectSimilarity.similar_image import get_best_images_annoy
