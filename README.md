@@ -95,7 +95,7 @@ PicMe's image-recommendation system is based upon pre-computed image embeddings 
 The software will return the repsective windows-style image paths of the top 12 matches.   
 These filepaths are meant to be opened using a specifically formatted hard drive :floppy_disk:  
 In order to be able to use the **PicMe** image recommender at its full potential, it is easiest to have access to said hard drive or its folder structure. 
-### HOWEVER, YOU CAN BUILD YOUR OWN DATABASE AS WELL. KEEP IN MIND THAT IT MIGHT TAKE SOME TIME BASED UPON IMAGE SIZES AND AMOUNT. SEE END OF READ ME FOR INSTRUCTION ON HOW TO BUILD YOUR OWN DATA BACKEND ⬇️
+### HOWEVER, YOU CAN BUILD YOUR OWN DATABASE AS WELL. KEEP IN MIND THAT IT MIGHT TAKE SOME TIME BASED UPON IMAGE SIZES AND AMOUNT. SEE [ISSUE 20](https://github.com/emiloetting/PicMe/issues/20) FOR INSTRUCTION ON HOW TO BUILD YOUR OWN DATA BACKEND ⬇️
 #### :bangbang: :open_file_folder: If you are in posession of the images & store them in the required directory-tree, the software is likely to work  :palm_tree: :bangbang:
 :plunger: **Should you still experience path issues, you can adjust the returned image paths in line 163 `GUI.py` file :memo: within method `run` of class `FindWorker` by *adding* something like this:**
 <p align="center">
