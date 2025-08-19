@@ -146,11 +146,8 @@ However, just in case, here's a quick descprition of the GUI's key features:
 <br>
 <br>
 
-# :hammer_and_wrench: Build your own backend (incl. databases, mapping-.json-file & [ANNOY](https://github.com/spotify/annoy)-indices :gear:
-### :exclamation: REMEMBER: THIS MIGHT TAKE A LOT OF TIME DEPENDING ON AVAILABLE COMPUTATIONAL POWER, AMOUNT OF IMAGES AND IMAGE SIZES :exclamation:
-
-
-# :gift: BONUS: Overview of image-distribution in vector space based upon implemented CLIP-embeddings :) :magic_wand:
+# :gift: BONUS:  
+Overview of image-distribution of default backend-base-images in feature-vector space based upon implemented CLIP-embeddings :) :magic_wand:
 <p align="center">
 <img width="1533" height="1073" alt="image" src="https://github.com/user-attachments/assets/35781ca1-97e7-4812-a0b9-27e32e053a55" />
 </p>
